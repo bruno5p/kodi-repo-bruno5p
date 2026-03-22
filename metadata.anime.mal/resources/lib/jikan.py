@@ -152,6 +152,27 @@ def get_episodes(mal_id):
     return episodes
 
 
+def get_episode_detail(mal_id, episode_id):
+    """
+    Fetch detailed info for a single episode.
+    Returns the episode dict (may include synopsis, duration), or None on failure.
+    """
+    logger.debug("get_episode_detail: mal_id={} episode_id={}".format(mal_id, episode_id))
+    data = _request("/anime/{}/episodes/{}".format(mal_id, episode_id))
+    if data and "data" in data:
+        ep = data["data"]
+        logger.debug(
+            "get_episode_detail: retrieved ep {} \"{}\" synopsis={}".format(
+                episode_id,
+                ep.get("title", "?"),
+                bool(ep.get("synopsis")),
+            )
+        )
+        return ep
+    logger.debug("get_episode_detail: no data for mal_id={} episode_id={}".format(mal_id, episode_id))
+    return None
+
+
 def get_pictures(mal_id):
     """
     Fetch all available pictures for an anime.

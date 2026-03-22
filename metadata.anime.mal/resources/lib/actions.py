@@ -184,7 +184,7 @@ def getdetails(handle, params):
     tag.setPlot(anime.get("synopsis", ""))
     tag.setPlotOutline((anime.get("synopsis", "") or "")[:200])
     tag.setGenres(genres)
-    tag.setStatus(status)
+    tag.setTvShowStatus(status)
     if year:
         tag.setYear(int(year))
     if premiered:
@@ -195,6 +195,9 @@ def getdetails(handle, params):
         tag.setMpaa(mpaa)
     if episode_count:
         tag.setEpisode(episode_count)
+
+    tag.setEpisodeGuide(str(mal_id))
+    logger.debug("getdetails: episode guide set for mal_id={}".format(mal_id))
 
     if score:
         tag.setRating(score, scored_by, "mal", True)
@@ -267,8 +270,8 @@ def _add_main_episodes(handle, mal_id, lang):
             '_add_main_episodes: ep {} "{}" aired={}'.format(ep_num, title, aired)
         )
 
+        episode_url = utils.encode_episode_url(mal_id, ep_num)
         item = xbmcgui.ListItem(title)
-        item.setProperty("url", utils.encode_episode_url(mal_id, ep_num))
         tag = item.getVideoInfoTag()
         tag.setMediaType("episode")
         tag.setTitle(title)
@@ -276,7 +279,7 @@ def _add_main_episodes(handle, mal_id, lang):
         tag.setEpisode(ep_num)
         if aired:
             tag.setFirstAired(aired)
-        xbmcplugin.addDirectoryItem(handle, "", item, isFolder=False)
+        xbmcplugin.addDirectoryItem(handle, episode_url, item, isFolder=False)
 
 
 def _add_specials_episodes(handle, mal_id, lang):
@@ -348,8 +351,8 @@ def _add_specials_episodes(handle, mal_id, lang):
             )
         )
 
+        special_url = utils.encode_special_url(mal_id, related_id)
         item = xbmcgui.ListItem(title)
-        item.setProperty("url", utils.encode_special_url(mal_id, related_id))
         tag = item.getVideoInfoTag()
         tag.setMediaType("episode")
         tag.setTitle(title)
@@ -363,7 +366,7 @@ def _add_specials_episodes(handle, mal_id, lang):
         if poster:
             item.setArt({"thumb": poster})
 
-        xbmcplugin.addDirectoryItem(handle, "", item, isFolder=False)
+        xbmcplugin.addDirectoryItem(handle, special_url, item, isFolder=False)
 
 
 # ---------------------------------------------------------------------------
@@ -400,43 +403,34 @@ def _resolve_main_episode(handle, mal_id, episode_num, lang):
     """Resolve a regular series episode."""
     logger.debug("_resolve_main_episode: mal_id={} ep={}".format(mal_id, episode_num))
 
-    episodes = jikan.get_episodes(mal_id)
-    target = None
     try:
         target_num = int(episode_num)
     except ValueError:
-        target_num = None
-        logger.warning(
-            '_resolve_main_episode: could not parse episode_num="{}"'.format(
-                episode_num
-            )
-        )
-
-    for ep in episodes:
-        if ep.get("mal_id") == target_num:
-            target = ep
-            break
-
-    if not target:
         logger.error(
-            "_resolve_main_episode: episode {} not found in mal_id={}".format(
-                episode_num, mal_id
+            '_resolve_main_episode: could not parse episode_num="{}"'.format(episode_num)
+        )
+        xbmcplugin.setResolvedUrl(handle, False, xbmcgui.ListItem())
+        return
+
+    ep = jikan.get_episode_detail(mal_id, target_num)
+    if not ep:
+        logger.error(
+            "_resolve_main_episode: no detail for episode {} in mal_id={}".format(
+                target_num, mal_id
             )
         )
         xbmcplugin.setResolvedUrl(handle, False, xbmcgui.ListItem())
         return
 
-    ep_num = target.get("mal_id") or target_num
-    title = (
-        target.get("title")
-        or target.get("title_romanji")
-        or "Episode {}".format(ep_num)
-    )
-    aired = (target.get("aired") or "")[:10]
+    ep_num = ep.get("mal_id") or target_num
+    title = ep.get("title") or ep.get("title_romanji") or "Episode {}".format(ep_num)
+    aired = (ep.get("aired") or "")[:10]
+    synopsis = ep.get("synopsis") or ""
+    duration = ep.get("duration") or 0  # seconds
 
     logger.debug(
-        '_resolve_main_episode: resolved ep {} "{}" aired={}'.format(
-            ep_num, title, aired
+        '_resolve_main_episode: ep {} "{}" aired={} synopsis={} duration={}s'.format(
+            ep_num, title, aired, bool(synopsis), duration
         )
     )
 
@@ -448,6 +442,10 @@ def _resolve_main_episode(handle, mal_id, episode_num, lang):
     tag.setEpisode(ep_num)
     if aired:
         tag.setFirstAired(aired)
+    if synopsis:
+        tag.setPlot(synopsis)
+    if duration:
+        tag.setDuration(duration)
     xbmcplugin.setResolvedUrl(handle, True, item)
 
 
@@ -534,11 +532,11 @@ def _parse_duration(duration_str):
 
 def getartwork(handle, params):
     """Return available artwork for a show."""
-    mal_id = params.get("url", "")
+    mal_id = params.get("url", "") or params.get("id", "")
     logger.debug("getartwork: mal_id={}".format(mal_id))
 
     if not mal_id:
-        logger.error("getartwork: missing url param")
+        logger.error("getartwork: missing url/id param")
         xbmcplugin.setResolvedUrl(handle, False, xbmcgui.ListItem())
         return
 
