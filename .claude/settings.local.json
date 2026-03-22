@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:kodi.wiki)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:docs.api.jikan.moe)",
+      "WebFetch(domain:api.jikan.moe)",
+      "Bash(find 'C:/Users/Bruno Guerreiro/Documents/Projects/Kodi/repository.bruno5p' -not -path */.git*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:jikan.moe)",
+      "WebFetch(domain:jikanpy.readthedocs.io)",
+      "WebFetch(domain:jikan.docs.apiary.io)",
+      "WebFetch(domain:docs.jikan.moe)",
+      "WebFetch(domain:jikan-me.github.io)",
+      "WebFetch(domain:www.dhiwise.com)",
+      "WebFetch(domain:dev.to)"
+    ]
+  }
+}
