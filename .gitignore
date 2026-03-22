@@ -58,3 +58,9 @@ dmypy.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude
+.claude/
+
+#Temporary ignores
+*/tests/
