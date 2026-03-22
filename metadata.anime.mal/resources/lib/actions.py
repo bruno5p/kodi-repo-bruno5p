@@ -203,12 +203,10 @@ def getdetails(handle, params):
         tag.setRating(score, scored_by, "mal", True)
         logger.debug("getdetails: set rating {}/10 ({} votes)".format(score, scored_by))
 
-    art = {}
     if poster:
-        art["poster"] = poster
-        art["thumb"] = poster
+        item.addAvailableArtwork(poster, "poster")
+        item.addAvailableArtwork(poster, "thumb")
         logger.debug("getdetails: poster set")
-    item.setArt(art)
 
     xbmcplugin.setResolvedUrl(handle, True, item)
     logger.debug("getdetails: resolved successfully for mal_id={}".format(mal_id))
