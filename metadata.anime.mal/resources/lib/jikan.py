@@ -17,6 +17,7 @@ except ImportError:
     from urllib import urlencode
 
 import json
+import re
 
 from resources.lib.logger import logger
 
@@ -209,6 +210,34 @@ def get_characters(mal_id):
         return characters
     logger.debug("get_characters: no characters for mal_id={}".format(mal_id))
     return []
+
+
+def get_external_ids(mal_id):
+    """
+    Fetch external site links and extract known external IDs.
+    Currently extracts: anidb_id (from AniDB URL).
+    Returns dict e.g. {'anidb_id': '9541'}, or empty dict.
+    """
+    logger.debug("get_external_ids: mal_id={}".format(mal_id))
+    data = _request("/anime/{}/external".format(mal_id))
+    result = {}
+    if data and "data" in data:
+        for item in data["data"]:
+            url = item.get("url", "")
+            m = re.search(
+                r"anidb\.net/(?:perl-bin/animedb\.pl\?.*?aid=|anime/)(\d+)", url
+            )
+            if m:
+                result["anidb_id"] = m.group(1)
+                logger.debug(
+                    "get_external_ids: found anidb_id={} for mal_id={}".format(
+                        result["anidb_id"], mal_id
+                    )
+                )
+                break
+    if not result:
+        logger.debug("get_external_ids: no known external IDs for mal_id={}".format(mal_id))
+    return result
 
 
 def get_relations(mal_id):

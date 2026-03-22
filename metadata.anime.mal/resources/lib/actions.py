@@ -15,7 +15,7 @@ import xbmcgui
 import xbmcplugin
 import xbmcaddon
 
-from resources.lib import jikan, utils
+from resources.lib import jikan, utils, fanart as fanart_mod
 from resources.lib.logger import logger
 
 ADDON = xbmcaddon.Addon()
@@ -204,9 +204,32 @@ def getdetails(handle, params):
         logger.debug("getdetails: set rating {}/10 ({} votes)".format(score, scored_by))
 
     if poster:
-        item.addAvailableArtwork(poster, "poster")
-        item.addAvailableArtwork(poster, "thumb")
+        tag.addAvailableArtwork(poster, "poster")
+        tag.addAvailableArtwork(poster, "thumb")
         logger.debug("getdetails: poster set")
+
+    # --- Fanart.tv artwork (clearlogo, clearart, fanart, banner, landscape) ---
+    api_key = ADDON.getSetting("fanarttv_api_key").strip()
+    if api_key:
+        lang_pref = "ja" if lang == utils.TITLE_LANG_JAPANESE else "en"
+        ext_ids = jikan.get_external_ids(mal_id)
+        anidb_id = ext_ids.get("anidb_id")
+        if anidb_id:
+            thetvdb_id = fanart_mod.anidb_to_thetvdb(anidb_id)
+            if thetvdb_id:
+                fanart_art = fanart_mod.get_artwork(thetvdb_id, api_key, lang_pref)
+                for art_type, urls in fanart_art.items():
+                    for url in urls:
+                        tag.addAvailableArtwork(url, art_type)
+                logger.debug(
+                    "getdetails: added Fanart.tv art types: {}".format(list(fanart_art.keys()))
+                )
+            else:
+                logger.debug("getdetails: no TheTVDB mapping for anidb_id={}".format(anidb_id))
+        else:
+            logger.debug("getdetails: no AniDB ID found for mal_id={}".format(mal_id))
+    else:
+        logger.debug("getdetails: Fanart.tv API key not set, skipping")
 
     xbmcplugin.setResolvedUrl(handle, True, item)
     logger.debug("getdetails: resolved successfully for mal_id={}".format(mal_id))
@@ -538,14 +561,40 @@ def getartwork(handle, params):
         xbmcplugin.setResolvedUrl(handle, False, xbmcgui.ListItem())
         return
 
+    item = xbmcgui.ListItem()
+    tag = item.getVideoInfoTag()
+
+    # --- Fanart.tv artwork (clearlogo, clearart, fanart, banner, landscape) ---
+    api_key = ADDON.getSetting("fanarttv_api_key").strip()
+    if api_key:
+        lang = _get_language_pref()
+        lang_pref = "ja" if lang == utils.TITLE_LANG_JAPANESE else "en"
+        ext_ids = jikan.get_external_ids(mal_id)
+        anidb_id = ext_ids.get("anidb_id")
+        if anidb_id:
+            thetvdb_id = fanart_mod.anidb_to_thetvdb(anidb_id)
+            if thetvdb_id:
+                fanart_art = fanart_mod.get_artwork(thetvdb_id, api_key, lang_pref)
+                for art_type, urls in fanart_art.items():
+                    for url in urls:
+                        tag.addAvailableArtwork(url, art_type)
+                logger.debug(
+                    "getartwork: added Fanart.tv art types: {}".format(list(fanart_art.keys()))
+                )
+            else:
+                logger.debug("getartwork: no TheTVDB mapping for anidb_id={}".format(anidb_id))
+        else:
+            logger.debug("getartwork: no AniDB ID found for mal_id={}".format(mal_id))
+    else:
+        logger.debug("getartwork: Fanart.tv API key not set, skipping")
+
+    # --- MAL/Jikan pictures (poster + additional fanart) ---
     pictures = jikan.get_pictures(mal_id)
     logger.debug(
-        "getartwork: processing {} pictures for mal_id={}".format(len(pictures), mal_id)
+        "getartwork: processing {} Jikan pictures for mal_id={}".format(len(pictures), mal_id)
     )
 
-    item = xbmcgui.ListItem()
     fanart_list = []
-
     for idx, pic in enumerate(pictures):
         large = utils.pick_image_url(pic, prefer_large=True)
         small = utils.pick_image_url(pic, prefer_large=False)
@@ -554,8 +603,8 @@ def getartwork(handle, params):
             continue
         url = large or small
         if idx == 0:
-            item.addAvailableArtwork(url, "poster")
-            item.addAvailableArtwork(small or url, "thumb")
+            tag.addAvailableArtwork(url, "poster")
+            tag.addAvailableArtwork(small or url, "thumb")
             logger.debug("getartwork: set poster from picture 0")
         else:
             fanart_list.append({"image": url, "preview": small or url})

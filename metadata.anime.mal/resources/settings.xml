@@ -6,4 +6,5 @@
            default="true"/>
   <setting id="include_relations" type="select" label="Relation types to include in Season 0"
            lvalues="32010|32011|32012|32013|32014" default="0|1|2|3|4"/>
+  <setting id="fanarttv_api_key" type="text" label="Fanart.tv API Key (optional)" default=""/>
 </settings>
