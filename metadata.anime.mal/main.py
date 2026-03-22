@@ -7,7 +7,6 @@ Entry point called by Kodi with plugin URL:
 
 import sys
 import xbmcplugin
-import xbmc
 
 try:
     from urllib.parse import parse_qs
@@ -15,6 +14,7 @@ except ImportError:
     from urlparse import parse_qs
 
 from resources.lib.actions import find, nfourl, getdetails, getepisodelist, getepisodedetails, getartwork
+from resources.lib.logger import logger
 
 HANDLE = int(sys.argv[1])
 
@@ -34,17 +34,18 @@ def run():
     params = {k: v[0] for k, v in parsed.items()}
     action = params.get('action', '').lower()
 
-    xbmc.log('metadata.anime.mal: action={} params={}'.format(action, params), xbmc.LOGDEBUG)
+    logger.debug('Invoked: action="{}" params={}'.format(action, params))
 
     handler = _ACTIONS.get(action)
     if handler:
         try:
             handler(HANDLE, params)
+            logger.debug('Action "{}" completed successfully'.format(action))
         except Exception as exc:
-            xbmc.log('metadata.anime.mal: unhandled exception in action "{}": {}'.format(action, exc), xbmc.LOGERROR)
+            logger.error('Unhandled exception in action "{}": {}'.format(action, exc))
             xbmcplugin.endOfDirectory(HANDLE, succeeded=False, cacheToDisc=False)
     else:
-        xbmc.log('metadata.anime.mal: unknown action "{}"'.format(action), xbmc.LOGWARNING)
+        logger.warning('Unknown action "{}"'.format(action))
         xbmcplugin.endOfDirectory(HANDLE, cacheToDisc=False)
 
 

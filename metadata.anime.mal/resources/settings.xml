@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
   <setting id="language" type="enum" label="Preferred title language"
-           values="English|Romaji|Japanese" default="0"/>
+           values="English|Romaji|Japanese" default="1"/>
   <setting id="include_specials" type="bool" label="Include Movies/OVAs/Specials as Season 0"
            default="true"/>
-  <setting id="include_relations" type="list" label="Relation types to include in Season 0"
+  <setting id="include_relations" type="select" label="Relation types to include in Season 0"
            lvalues="32010|32011|32012|32013|32014" default="0|1|2|3|4"/>
 </settings>
