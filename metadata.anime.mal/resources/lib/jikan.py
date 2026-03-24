@@ -193,25 +193,6 @@ def get_pictures(mal_id):
     return []
 
 
-def get_characters(mal_id):
-    """
-    Fetch character and voice actor info for an anime.
-    Returns list of character entries, or empty list.
-    """
-    logger.debug("get_characters: mal_id={}".format(mal_id))
-    data = _request("/anime/{}/characters".format(mal_id))
-    if data and "data" in data:
-        characters = data["data"]
-        logger.debug(
-            "get_characters: found {} characters for mal_id={}".format(
-                len(characters), mal_id
-            )
-        )
-        return characters
-    logger.debug("get_characters: no characters for mal_id={}".format(mal_id))
-    return []
-
-
 def get_external_ids(mal_id):
     """
     Fetch external site links and extract known external IDs.
@@ -240,22 +221,3 @@ def get_external_ids(mal_id):
     return result
 
 
-def get_relations(mal_id):
-    """
-    Fetch related anime/manga entries.
-    Returns list of relation dicts:
-      [{'relation': 'Sequel', 'entry': [{'mal_id': ..., 'type': 'anime', 'name': ...}]}]
-    or empty list.
-    """
-    logger.debug("get_relations: mal_id={}".format(mal_id))
-    data = _request("/anime/{}/relations".format(mal_id))
-    if data and "data" in data:
-        relations = data["data"]
-        logger.debug(
-            "get_relations: found {} relation groups for mal_id={}".format(
-                len(relations), mal_id
-            )
-        )
-        return relations
-    logger.debug("get_relations: no relations for mal_id={}".format(mal_id))
-    return []

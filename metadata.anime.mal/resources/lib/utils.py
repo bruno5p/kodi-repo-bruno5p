@@ -2,12 +2,6 @@
 Utility helpers: title selection, field mapping, image URL extraction.
 """
 
-# Relation types from Jikan that we treat as Season 0 specials
-SPECIAL_RELATION_TYPES = {"Movie", "OVA", "Special", "ONA", "Music"}
-
-# Anime types considered "specials" when encountered via relations
-SPECIAL_ANIME_TYPES = {"Movie", "OVA", "Special", "ONA", "Music"}
-
 # Mapping from MAL content rating to MPAA-style labels
 RATING_MAP = {
     "G - All Ages": "G",
@@ -141,10 +135,6 @@ def encode_episode_url(mal_id, episode_num):
     """Encode a regular episode reference as a URL token."""
     return "{}|ep|{}".format(mal_id, episode_num)
 
-
-def encode_special_url(original_mal_id, related_mal_id):
-    """Encode a special/movie episode reference as a URL token."""
-    return "{}|special|{}".format(original_mal_id, related_mal_id)
 
 
 def decode_url(url):

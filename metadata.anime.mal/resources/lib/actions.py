@@ -12,6 +12,7 @@ Kodi calls this scraper via plugin URL params:
 
 import re
 import xbmcgui
+
 import xbmcplugin
 import xbmcaddon
 
@@ -28,10 +29,6 @@ def _get_language_pref():
         return utils.TITLE_LANG_ENGLISH
 
 
-def _include_specials():
-    return ADDON.getSetting("include_specials") != "false"
-
-
 # ---------------------------------------------------------------------------
 # find / search
 # ---------------------------------------------------------------------------
@@ -40,12 +37,13 @@ def _include_specials():
 def find(handle, params):
     """Search for anime by title and return a list of candidates."""
     query = params.get("title", "") or params.get("search", "")
-    logger.debug('find: query="{}"'.format(query))
 
     if not query:
         logger.warning("find: empty search query, returning empty directory")
         xbmcplugin.endOfDirectory(handle, cacheToDisc=False)
         return
+
+    logger.debug('find: query="{}"'.format(query))
 
     results = jikan.search(query)
     lang = _get_language_pref()
@@ -111,7 +109,18 @@ def nfourl(handle, params):
     if match:
         mal_id = match.group(1)
         logger.debug("nfourl: extracted mal_id={} from MAL URL".format(mal_id))
-    else:
+
+    if not mal_id:
+        m = re.search(
+            r'<uniqueid[^>]+type=["\']mal["\'][^>]*>\s*(\d+)\s*</uniqueid>',
+            nfo_content,
+            re.IGNORECASE,
+        )
+        if m:
+            mal_id = m.group(1)
+            logger.debug("nfourl: extracted mal_id={} from uniqueid tag".format(mal_id))
+
+    if not mal_id:
         stripped = nfo_content.strip()
         if stripped.isdigit():
             mal_id = stripped
@@ -209,8 +218,9 @@ def getdetails(handle, params):
         logger.debug("getdetails: poster set")
 
     # --- Fanart.tv artwork (clearlogo, clearart, fanart, banner, landscape) ---
+    fetch_fanart = ADDON.getSetting("fetch_fanart") != "false"
     api_key = ADDON.getSetting("fanarttv_api_key").strip()
-    if api_key:
+    if fetch_fanart and api_key:
         lang_pref = "ja" if lang == utils.TITLE_LANG_JAPANESE else "en"
         ext_ids = jikan.get_external_ids(mal_id)
         anidb_id = ext_ids.get("anidb_id")
@@ -228,6 +238,8 @@ def getdetails(handle, params):
                 logger.debug("getdetails: no TheTVDB mapping for anidb_id={}".format(anidb_id))
         else:
             logger.debug("getdetails: no AniDB ID found for mal_id={}".format(mal_id))
+    elif not fetch_fanart:
+        logger.debug("getdetails: Fanart.tv fetch disabled, skipping")
     else:
         logger.debug("getdetails: Fanart.tv API key not set, skipping")
 
@@ -241,18 +253,9 @@ def getdetails(handle, params):
 
 
 def getepisodelist(handle, params):
-    """
-    Return episode stubs for a show.
-    Season 0 → related movies/OVAs/specials.
-    Season 1+ → main series episodes.
-    """
+    """Return episode stubs for a show."""
     mal_id = params.get("url", "")
-    try:
-        season = int(params.get("season", "1"))
-    except ValueError:
-        season = 1
-
-    logger.debug("getepisodelist: mal_id={} season={}".format(mal_id, season))
+    logger.debug("getepisodelist: mal_id={}".format(mal_id))
 
     if not mal_id:
         logger.error("getepisodelist: missing url param")
@@ -260,14 +263,7 @@ def getepisodelist(handle, params):
         return
 
     lang = _get_language_pref()
-
-    if season == 0 and _include_specials():
-        logger.debug("getepisodelist: fetching Season 0 specials/movies/OVAs")
-        _add_specials_episodes(handle, mal_id, lang)
-    else:
-        logger.debug("getepisodelist: fetching Season {} main episodes".format(season))
-        _add_main_episodes(handle, mal_id, lang)
-
+    _add_main_episodes(handle, mal_id, lang)
     xbmcplugin.endOfDirectory(handle, cacheToDisc=False)
 
 
@@ -303,92 +299,6 @@ def _add_main_episodes(handle, mal_id, lang):
         xbmcplugin.addDirectoryItem(handle, episode_url, item, isFolder=False)
 
 
-def _add_specials_episodes(handle, mal_id, lang):
-    """Add Season 0 episode stubs from related movies/OVAs/specials."""
-    relations = jikan.get_relations(mal_id)
-    logger.debug(
-        "_add_specials_episodes: found {} relation groups for mal_id={}".format(
-            len(relations), mal_id
-        )
-    )
-
-    specials = []
-    for relation in relations:
-        relation_type = relation.get("relation", "?")
-        entries = relation.get("entry", [])
-        logger.debug(
-            '_add_specials_episodes: relation "{}" has {} entries'.format(
-                relation_type, len(entries)
-            )
-        )
-        for entry in entries:
-            if entry.get("type") != "anime":
-                continue
-            related_id = entry.get("mal_id")
-            if not related_id:
-                continue
-            related_anime = jikan.get_anime(related_id)
-            if not related_anime:
-                logger.warning(
-                    "_add_specials_episodes: could not fetch related mal_id={}".format(
-                        related_id
-                    )
-                )
-                continue
-            anime_type = related_anime.get("type", "")
-            if anime_type in utils.SPECIAL_ANIME_TYPES:
-                logger.debug(
-                    '_add_specials_episodes: including related mal_id={} type="{}" as special'.format(
-                        related_id, anime_type
-                    )
-                )
-                specials.append(related_anime)
-            else:
-                logger.debug(
-                    '_add_specials_episodes: skipping related mal_id={} type="{}"'.format(
-                        related_id, anime_type
-                    )
-                )
-
-    def sort_key(a):
-        return utils.extract_premiered(a.get("aired")) or "9999"
-
-    specials.sort(key=sort_key)
-    logger.debug(
-        "_add_specials_episodes: {} specials to add for mal_id={}".format(
-            len(specials), mal_id
-        )
-    )
-
-    for idx, special in enumerate(specials, start=1):
-        related_id = str(special["mal_id"])
-        title = utils.pick_title(special.get("titles", []), lang)
-        aired = utils.extract_premiered(special.get("aired"))
-        anime_type = special.get("type", "Special")
-
-        logger.debug(
-            '_add_specials_episodes: S0E{} mal_id={} type="{}" title="{}" aired={}'.format(
-                idx, related_id, anime_type, title, aired
-            )
-        )
-
-        special_url = utils.encode_special_url(mal_id, related_id)
-        item = xbmcgui.ListItem(title)
-        tag = item.getVideoInfoTag()
-        tag.setMediaType("episode")
-        tag.setTitle(title)
-        tag.setSeason(0)
-        tag.setEpisode(idx)
-        tag.setPlot(special.get("synopsis", ""))
-        if aired:
-            tag.setFirstAired(aired)
-
-        poster = utils.pick_image_url(special.get("images", {}))
-        if poster:
-            item.setArt({"thumb": poster})
-
-        xbmcplugin.addDirectoryItem(handle, special_url, item, isFolder=False)
-
 
 # ---------------------------------------------------------------------------
 # getepisodedetails
@@ -414,10 +324,7 @@ def getepisodedetails(handle, params):
         )
     )
 
-    if decoded["type"] == "special":
-        _resolve_special_episode(handle, decoded["mal_id"], decoded["value"], lang)
-    else:
-        _resolve_main_episode(handle, decoded["mal_id"], decoded["value"], lang)
+    _resolve_main_episode(handle, decoded["mal_id"], decoded["value"], lang)
 
 
 def _resolve_main_episode(handle, mal_id, episode_num, lang):
@@ -470,63 +377,6 @@ def _resolve_main_episode(handle, mal_id, episode_num, lang):
     xbmcplugin.setResolvedUrl(handle, True, item)
 
 
-def _resolve_special_episode(handle, original_mal_id, related_mal_id, lang):
-    """Resolve a movie/OVA/special episode."""
-    logger.debug(
-        "_resolve_special_episode: original_mal_id={} related_mal_id={}".format(
-            original_mal_id, related_mal_id
-        )
-    )
-
-    anime = jikan.get_anime(related_mal_id)
-    if not anime:
-        logger.error(
-            "_resolve_special_episode: no data for related_mal_id={}".format(
-                related_mal_id
-            )
-        )
-        xbmcplugin.setResolvedUrl(handle, False, xbmcgui.ListItem())
-        return
-
-    title = utils.pick_title(anime.get("titles", []), lang)
-    aired = utils.extract_premiered(anime.get("aired"))
-    duration = anime.get("duration", "") or ""
-    runtime = _parse_duration(duration)
-    score = anime.get("score") or 0
-    scored_by = anime.get("scored_by") or 0
-    poster = utils.pick_image_url(anime.get("images", {}))
-
-    logger.debug(
-        '_resolve_special_episode: title="{}" aired={} runtime={}s score={}'.format(
-            title, aired, runtime, score
-        )
-    )
-
-    item = xbmcgui.ListItem(title)
-    tag = item.getVideoInfoTag()
-    tag.setUniqueIDs({"mal": str(anime["mal_id"])}, "mal")
-    tag.setMediaType("episode")
-    tag.setTitle(title)
-    tag.setSeason(0)
-    tag.setPlot(anime.get("synopsis", ""))
-    if aired:
-        tag.setFirstAired(aired)
-    if runtime:
-        tag.setDuration(runtime)
-
-    if score:
-        tag.setRating(score, scored_by, "mal", True)
-
-    if poster:
-        item.setArt({"thumb": poster})
-
-    xbmcplugin.setResolvedUrl(handle, True, item)
-    logger.debug(
-        "_resolve_special_episode: resolved successfully for related_mal_id={}".format(
-            related_mal_id
-        )
-    )
-
 
 def _parse_duration(duration_str):
     """
@@ -565,8 +415,9 @@ def getartwork(handle, params):
     tag = item.getVideoInfoTag()
 
     # --- Fanart.tv artwork (clearlogo, clearart, fanart, banner, landscape) ---
+    fetch_fanart = ADDON.getSetting("fetch_fanart") != "false"
     api_key = ADDON.getSetting("fanarttv_api_key").strip()
-    if api_key:
+    if fetch_fanart and api_key:
         lang = _get_language_pref()
         lang_pref = "ja" if lang == utils.TITLE_LANG_JAPANESE else "en"
         ext_ids = jikan.get_external_ids(mal_id)
@@ -585,6 +436,8 @@ def getartwork(handle, params):
                 logger.debug("getartwork: no TheTVDB mapping for anidb_id={}".format(anidb_id))
         else:
             logger.debug("getartwork: no AniDB ID found for mal_id={}".format(mal_id))
+    elif not fetch_fanart:
+        logger.debug("getartwork: Fanart.tv fetch disabled, skipping")
     else:
         logger.debug("getartwork: Fanart.tv API key not set, skipping")
 

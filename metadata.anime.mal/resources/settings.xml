@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-  <setting id="language" type="enum" label="Preferred title language"
-           values="English|Romaji|Japanese" default="1"/>
-  <setting id="include_specials" type="bool" label="Include Movies/OVAs/Specials as Season 0"
-           default="true"/>
-  <setting id="include_relations" type="select" label="Relation types to include in Season 0"
-           lvalues="32010|32011|32012|32013|32014" default="0|1|2|3|4"/>
-  <setting id="fanarttv_api_key" type="text" label="Fanart.tv API Key (optional)" default=""/>
+  <category label="General">
+    <setting id="language" type="enum" label="Preferred title language"
+             values="English|Romaji|Japanese" default="1"/>
+  </category>
+  <category label="Fanart.tv">
+    <setting id="fetch_fanart" type="bool" label="Fetch Fanart.tv artwork" default="true"/>
+    <setting id="fanarttv_api_key" type="text" label="API Key (optional)" default=""/>
+  </category>
 </settings>
