@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+  <category label="Library">
+    <setting id="kodi_dir_name" type="text" label="Symlink folder name" default="_kodi"/>
+    <setting id="run_mode" type="enum" label="Action on run"
+             values="Reindex and scan|Reindex only" default="0"/>
+  </category>
+</settings>

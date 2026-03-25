@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="script.anime.library"
+       version="1.0.0"
+       name="Anime Library Manager"
+       provider-name="bruno5p">
+  <requires>
+    <import addon="xbmc.python" version="3.0.0"/>
+  </requires>
+
+  <extension point="xbmc.python.script" library="default.py">
+    <provides>executable</provides>
+  </extension>
+
+  <extension point="kodi.context.item" library="context.py">
+    <menu id="kodi_action_browse_items">
+      <item>
+        <label>Update Anime Library</label>
+        <condition>Window.IsVisible(Videos)</condition>
+      </item>
+    </menu>
+  </extension>
+
+  <extension point="xbmc.addon.metadata">
+    <summary lang="en">Rebuilds the anime symlink tree and triggers a Kodi library scan</summary>
+    <description lang="en">Maintains a flat symlink directory inside your Anime folder so Kodi can scan nested anime collections (one MAL season = one folder). Run from Programs or the Video Library context menu to rebuild symlinks and rescan.</description>
+    <license>GPL-2.0-only</license>
+    <source>https://github.com/bruno5p/repository.bruno5p</source>
+    <news>1.0.0: Initial release</news>
+  </extension>
+</addon>
