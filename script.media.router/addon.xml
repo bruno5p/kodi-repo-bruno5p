@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="script.media.router" version="1.1.0" name="Media Router" provider-name="bruno5p">
+  <requires>
+    <import addon="xbmc.python" version="3.0.0"/>
+  </requires>
+  <extension point="xbmc.python.script" library="default.py">
+    <provides>executable</provides>
+  </extension>
+  <extension point="xbmc.addon.metadata">
+    <summary lang="en_GB">Route media playback between local library and streaming addons</summary>
+    <description lang="en_GB">Routes anime, TV shows, and movies to local playback or streaming addons (Otaku Testing, TMDb Helper) based on configurable per-type settings. Call via: RunScript(script.media.router, anime|tvshow|movie, ID)</description>
+    <license>GPL-2.0-only</license>
+    <platform>all</platform>
+  </extension>
+</addon>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<settings>
+
+  <category label="General">
+    <setting id="general.play_mode" type="enum" label="Default Play Mode"
+             values="Always Local|Always Stream|Always Choose"
+             default="0"/>
+  </category>
+
+  <category label="Anime">
+    <setting id="anime.play_mode" type="enum" label="Play Mode"
+             values="Use General Default|Always Local|Always Stream|Always Choose"
+             default="0"/>
+    <setting id="anime.id_type" type="enum" label="ID Source"
+             values="MAL (MyAnimeList)|TMDB"
+             default="0"/>
+  </category>
+
+</settings>
