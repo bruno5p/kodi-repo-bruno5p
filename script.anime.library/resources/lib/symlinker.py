@@ -2,25 +2,63 @@ import os
 
 from logger import logger
 
+VIDEO_EXTS = {'.mkv', '.mp4', '.avi', '.m4v', '.mov', '.wmv', '.flv', '.ts', '.m2ts'}
+
+
+def _has_video_files(path):
+    """Return True if the directory directly contains at least one video file."""
+    for entry in os.scandir(path):
+        if entry.is_file() and os.path.splitext(entry.name)[1].lower() in VIDEO_EXTS:
+            return True
+    return False
+
+
+def _collect_episode_dirs(path, kodi_dir_name, desired):
+    """
+    Recursively walk path to find every directory that directly contains video
+    files (an "episode dir").  When found, register it in desired under its
+    own name.  Directories that contain no video files are traversed further.
+
+    Supports any nesting depth, so these patterns all work:
+
+        anime_root/Title/<ep files>                      (flat show)
+        anime_root/Title/Season Title/<ep files>         (show + seasons)
+        anime_root/Letter/Title/Season Title/<ep files>  (letter-grouped)
+    """
+    for entry in os.scandir(path):
+        if not entry.is_dir(follow_symlinks=False) or entry.name == kodi_dir_name:
+            continue
+        if _has_video_files(entry.path):
+            name = entry.name
+            if name in desired:
+                logger.warning(
+                    "rebuild: name collision for %r — keeping %r, ignoring %r"
+                    % (name, desired[name], entry.path)
+                )
+            else:
+                logger.debug("rebuild: episode dir %r -> %r" % (name, entry.path))
+                desired[name] = entry.path
+        else:
+            _collect_episode_dirs(entry.path, kodi_dir_name, desired)
+
 
 def rebuild(anime_root, kodi_dir_name="_kodi"):
     """
-    Walk anime_root one level deep (show dirs), then one more level (season dirs).
-    Create directory symlinks in anime_root/<kodi_dir_name>/ pointing to each season dir.
-    Remove stale symlinks that no longer have a corresponding source.
+    Recursively find every directory under anime_root that directly contains
+    video files (an "episode dir") and create a symlink to it inside
+    anime_root/<kodi_dir_name>/.  Stale symlinks are removed.
 
-    Expected input layout:
+    Supported layouts (any nesting depth):
         anime_root/
-            Show Name/
-                Season Name/   <- episode files live here
-                Season 2/
-            Another Show/
-                Another Show/
+            Title/<ep files>                       <- flat show, no seasons
+            Title/Season Title/<ep files>          <- show with seasons
+            Letter/Title/Season Title/<ep files>   <- letter-grouped with seasons
+            Letter/Title/<ep files>                <- letter-grouped, flat
 
     Resulting symlink layout (anime_root/<kodi_dir_name>/):
-        Season Name        -> ../Show Name/Season Name/
-        Season 2           -> ../Show Name/Season 2/
-        Another Show       -> ../Another Show/Another Show/
+        Title              -> ../Title/
+        Season Title       -> ../Title/Season Title/
+        Season Title       -> ../Letter/Title/Season Title/
 
     Returns (created, removed, errors) counts.
     Raises PermissionError with a helpful message on Windows if Developer Mode is off.
@@ -31,16 +69,9 @@ def rebuild(anime_root, kodi_dir_name="_kodi"):
 
     # Collect desired symlinks: {link_name: absolute_target_path}
     desired = {}
-    for entry in os.scandir(anime_root):
-        if not entry.is_dir(follow_symlinks=False) or entry.name == kodi_dir_name:
-            continue
-        logger.debug("rebuild: scanning show dir %r" % entry.name)
-        for season in os.scandir(entry.path):
-            if season.is_dir(follow_symlinks=False):
-                logger.debug("rebuild: found season %r -> %r" % (season.name, season.path))
-                desired[season.name] = season.path
+    _collect_episode_dirs(anime_root, kodi_dir_name, desired)
 
-    logger.info("rebuild: %d season dirs found" % len(desired))
+    logger.info("rebuild: %d episode dirs found" % len(desired))
 
     # Remove stale symlinks
     removed = 0
