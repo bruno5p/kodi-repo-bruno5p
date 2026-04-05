@@ -193,6 +193,7 @@ def getdetails(handle, params):
     tag.setPlot(anime.get("synopsis", ""))
     tag.setPlotOutline((anime.get("synopsis", "") or "")[:200])
     tag.setGenres(genres)
+    tag.setTags(["anime"])
     tag.setTvShowStatus(status)
     if year:
         tag.setYear(int(year))
