@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<settings>
+  <category label="MAL Manager">
+    <setting id="username"     type="text"   label="MAL Username (auto-set)" default="" visible="false"/>
+    <setting id="access_token" type="text"   label="Access Token (auto-set)"  default="" visible="false"/>
+    <setting id="refresh_token" type="text"  label="Refresh Token (auto-set)" default="" visible="false"/>
+    <setting id="authenticate" type="action" label="Authorize with MyAnimeList"
+             action="RunScript(script.mal.manager,auth)"/>
+  </category>
+</settings>
