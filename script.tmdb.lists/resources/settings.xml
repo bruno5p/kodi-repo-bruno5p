@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<settings>
+  <category label="TMDb Lists">
+    <setting id="tmdb_api_key" type="text" label="TMDb API Key (optional — auto-detected from Bingie Helper)" default=""/>
+    <setting id="update_on_startup" type="bool" label="Check for updates on startup" default="true"/>
+  </category>
+</settings>
