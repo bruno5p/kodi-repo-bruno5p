@@ -203,24 +203,22 @@ if __name__ == "__main__":
 
             configured_key = xbmcaddon.Addon().getSetting("tmdb_api_key").strip()
             api_key, key_source = resolve_api_key(configured_key)
-            if not api_key:
-                xbmcgui.Dialog().notification(
-                    "List Builder", "No TMDb API key available (install Bingie Helper or set key in settings)",
-                    xbmcgui.NOTIFICATION_ERROR, 4000,
-                )
-            else:
-                lists = list_manager.load_lists()
-                updated = 0
-                for entry in lists:
-                    if list_manager.needs_update(entry):
-                        success = list_builder.build_list(entry, api_key)
-                        if success:
-                            list_manager.mark_updated(entry["id"])
-                            updated += 1
-                xbmcgui.Dialog().notification(
-                    "List Builder", "Updated {} list(s).".format(updated),
-                    xbmcgui.NOTIFICATION_INFO, 3000,
-                )
+
+            lists = list_manager.load_lists()
+            updated = 0
+            for entry in lists:
+                if list_manager.needs_update(entry):
+                    entry_type = entry.get("type", "tmdb")
+                    if entry_type == "tmdb" and not api_key:
+                        continue  # skip tmdb lists if no key
+                    success = list_builder.build_entry(entry, api_key)
+                    if success:
+                        list_manager.mark_updated(entry["id"])
+                        updated += 1
+            xbmcgui.Dialog().notification(
+                "List Builder", "Updated {} list(s).".format(updated),
+                xbmcgui.NOTIFICATION_INFO, 3000,
+            )
 
         elif action == "update_list" and list_id_arg:
             import xbmcaddon
@@ -236,12 +234,14 @@ if __name__ == "__main__":
             else:
                 lists = list_manager.load_lists()
                 entry = next((e for e in lists if e["id"] == list_id), None)
-                if entry and api_key:
-                    success = list_builder.build_list(entry, api_key)
+                if not entry:
+                    logger.warning("default: list_id {} not found".format(list_id))
+                elif entry.get("type") == "tmdb" and not api_key:
+                    logger.warning("default: no api_key for tmdb list id={}".format(list_id))
+                else:
+                    success = list_builder.build_entry(entry, api_key)
                     if success:
                         list_manager.mark_updated(list_id)
-                elif not entry:
-                    logger.warning("default: list_id {} not found".format(list_id))
 
         elif action == "show_url" and list_id_arg:
             from resources.lib import list_manager, ui

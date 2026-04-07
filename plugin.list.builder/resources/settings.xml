@@ -4,4 +4,7 @@
     <setting id="tmdb_api_key" type="text" label="TMDb API Key (optional — auto-detected from Bingie Helper)" default=""/>
     <setting id="update_on_startup" type="bool" label="Check for updates on startup" default="true"/>
   </category>
+  <category label="MDBList">
+    <setting id="mdblist_api_key" type="text" label="MDBList API Key (optional — for private lists)" default=""/>
+  </category>
 </settings>

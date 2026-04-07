@@ -39,6 +39,18 @@ Smart Playlist Sampler:
     "sort_direction": "ascending"  # ascending | descending (ignored for random)
 }
 
+MDBList list:
+{
+    "id": 20260407123456,
+    "type": "mdblist",
+    "label": "Top Anime Movies",
+    "description": "",
+    "mdblist_url": "https://mdblist.com/lists/user/top-anime",
+    "total_items": 50,
+    "update_interval": 1,         # days between fetches
+    "last_updated": null          # ISO date string or null
+}
+
 Note (tmdb): first_air_date_gte and first_air_date_gte_days are mutually exclusive.
       When first_air_date_gte_days is set the actual date is computed at build time.
       For movies "first_air_date_gte" maps to "primary_release_date.gte" in the API.
@@ -95,7 +107,7 @@ def save_lists(lists):
 
 
 def add_list(label, description, list_type="tmdb", mediatype=None, update_interval=30,
-             filters=None, playlist_config=None):
+             filters=None, playlist_config=None, mdblist_config=None):
     """
     Create a new list config entry and append it to lists.json.
     Returns the new list entry dict.
@@ -116,6 +128,17 @@ def add_list(label, description, list_type="tmdb", mediatype=None, update_interv
             "sample_size": playlist_config["sample_size"],
             "sort_by": playlist_config["sort_by"],
             "sort_direction": playlist_config["sort_direction"],
+        }
+    elif list_type == "mdblist":
+        entry = {
+            "id": list_id,
+            "type": "mdblist",
+            "label": label,
+            "description": description,
+            "mdblist_url": mdblist_config["mdblist_url"],
+            "total_items": mdblist_config.get("total_items", 50),
+            "update_interval": update_interval,
+            "last_updated": None,
         }
     else:
         entry = {

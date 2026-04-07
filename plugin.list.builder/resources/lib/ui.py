@@ -44,6 +44,11 @@ def show_management():
                 menu_items.append("{} [COLOR gray](sampler: {})[/COLOR]".format(
                     entry["label"], playlist_name
                 ))
+            elif entry.get("type") == "mdblist":
+                last = entry.get("last_updated") or "never"
+                menu_items.append("{} [COLOR gray](mdblist, updated: {})[/COLOR]".format(
+                    entry["label"], last
+                ))
             else:
                 last = entry.get("last_updated") or "never"
                 menu_items.append("{} [COLOR gray]({}, updated: {})[/COLOR]".format(
@@ -70,6 +75,17 @@ def _show_list_actions(entry):
         if choice == 0:
             show_edit_smartplaylist(entry)
         elif choice == 1:
+            _confirm_delete(entry)
+    elif entry.get("type") == "mdblist":
+        actions = ["Update now", "Edit", "Show widget URL", "Delete"]
+        choice = xbmcgui.Dialog().select(entry["label"], actions)
+        if choice == 0:
+            _run_update(entry)
+        elif choice == 1:
+            show_edit_mdblist(entry)
+        elif choice == 2:
+            show_widget_url(entry)
+        elif choice == 3:
             _confirm_delete(entry)
     else:
         actions = ["Update now", "Edit", "Show widget URL", "Delete"]
@@ -101,19 +117,23 @@ def _offer_immediate_build(entry):
 
 
 def _run_update(entry):
-    api_key = _get_api_key()
-    if not api_key:
-        xbmcgui.Dialog().notification(
-            _ADDON_NAME, "No TMDb API key configured!",
-            xbmcgui.NOTIFICATION_ERROR, 4000,
-        )
-        return
+    entry_type = entry.get("type", "tmdb")
+    if entry_type == "tmdb":
+        api_key = _get_api_key()
+        if not api_key:
+            xbmcgui.Dialog().notification(
+                _ADDON_NAME, "No TMDb API key configured!",
+                xbmcgui.NOTIFICATION_ERROR, 4000,
+            )
+            return
+    else:
+        api_key = None
 
     xbmcgui.Dialog().notification(
         _ADDON_NAME, "Updating: {}".format(entry["label"]),
         xbmcgui.NOTIFICATION_INFO, 2000,
     )
-    success = list_builder.build_list(entry, api_key)
+    success = list_builder.build_entry(entry, api_key)
     if success:
         list_manager.mark_updated(entry["id"])
         xbmcgui.Dialog().notification(
@@ -169,11 +189,13 @@ def show_add_list():
     Returns the new list entry dict on success, or None if cancelled.
     """
     d = xbmcgui.Dialog()
-    source_choice = d.select("List type", ["TMDb Discover", "Smart Playlist Sampler"])
+    source_choice = d.select("List type", ["TMDb Discover", "Smart Playlist Sampler", "MDBList"])
     if source_choice < 0:
         return None
     if source_choice == 1:
         return show_add_smartplaylist()
+    if source_choice == 2:
+        return _show_add_mdblist()
     return _show_add_tmdb_list()
 
 
@@ -293,6 +315,128 @@ def _select_genres(dialog, mediatype, prompt, preselected_ids=None):
         return None  # user pressed Back — caller decides what to do
 
     return [genre_map[genre_names[i]] for i in result]
+
+
+# ---------------------------------------------------------------------------
+# Add / Edit MDBList
+# ---------------------------------------------------------------------------
+
+def _show_add_mdblist():
+    """
+    Multi-step dialog to create a new MDBList entry.
+    Returns the new list entry dict on success, or None if cancelled.
+    """
+    d = xbmcgui.Dialog()
+
+    label = d.input("List name", defaultt="", type=xbmcgui.INPUT_ALPHANUM)
+    if not label:
+        return None
+
+    url = d.input(
+        "MDBList URL (e.g. https://mdblist.com/lists/user/listname)",
+        defaultt="https://mdblist.com/lists/",
+        type=xbmcgui.INPUT_ALPHANUM,
+    )
+    if not url or url == "https://mdblist.com/lists/":
+        return None
+
+    total_str = d.input("Max items to fetch", defaultt="50", type=xbmcgui.INPUT_NUMERIC)
+    try:
+        total_items = int(total_str) if total_str and int(total_str) > 0 else 50
+    except ValueError:
+        total_items = 50
+
+    interval_choice = d.select("Update interval", [o[0] for o in INTERVAL_OPTIONS], preselect=3)
+    if interval_choice < 0:
+        return None
+    update_interval = INTERVAL_OPTIONS[interval_choice][1]
+
+    return list_manager.add_list(
+        label=label,
+        description="",
+        list_type="mdblist",
+        update_interval=update_interval,
+        mdblist_config={"mdblist_url": url, "total_items": total_items},
+    )
+
+
+def show_edit_mdblist(entry):
+    """
+    Menu-based edit dialog for MDBList entries.
+    Returns True if changes were saved.
+    """
+    working = {
+        "label": entry["label"],
+        "mdblist_url": entry.get("mdblist_url", ""),
+        "total_items": entry.get("total_items", 50),
+        "update_interval": entry.get("update_interval", 1),
+    }
+
+    changed = False
+
+    while True:
+        menu_items = [
+            "Name:             {}".format(working["label"]),
+            "MDBList URL:      {}".format(working["mdblist_url"] or "(not set)"),
+            "Max items:        {}".format(working["total_items"]),
+            "Update interval:  {} days".format(working["update_interval"]),
+            "[COLOR green]Save[/COLOR]",
+            "[COLOR red]Cancel[/COLOR]",
+        ]
+
+        choice = xbmcgui.Dialog().select("Edit: {}".format(working["label"]), menu_items)
+
+        SAVE_IDX = len(menu_items) - 2
+        CANCEL_IDX = len(menu_items) - 1
+
+        if choice < 0 or choice == CANCEL_IDX:
+            break
+
+        if choice == SAVE_IDX:
+            list_manager.update_list(entry["id"], {
+                "label": working["label"],
+                "mdblist_url": working["mdblist_url"],
+                "total_items": working["total_items"],
+                "update_interval": working["update_interval"],
+            })
+            changed = True
+            xbmcgui.Dialog().notification(
+                _ADDON_NAME, "'{}' saved.".format(working["label"]),
+                xbmcgui.NOTIFICATION_INFO, 2000,
+            )
+            break
+
+        d = xbmcgui.Dialog()
+
+        if choice == 0:
+            val = d.input("List name", defaultt=working["label"], type=xbmcgui.INPUT_ALPHANUM)
+            if val:
+                working["label"] = val
+
+        elif choice == 1:
+            val = d.input("MDBList URL", defaultt=working["mdblist_url"], type=xbmcgui.INPUT_ALPHANUM)
+            if val:
+                working["mdblist_url"] = val
+
+        elif choice == 2:
+            val = d.input("Max items to fetch",
+                          defaultt=str(working["total_items"]),
+                          type=xbmcgui.INPUT_NUMERIC)
+            try:
+                if val and int(val) > 0:
+                    working["total_items"] = int(val)
+            except ValueError:
+                pass
+
+        elif choice == 3:
+            keys = [o[1] for o in INTERVAL_OPTIONS]
+            cur = working["update_interval"]
+            cur_idx = keys.index(cur) if cur in keys else 3
+            c = d.select("Update interval", [o[0] for o in INTERVAL_OPTIONS], preselect=cur_idx)
+            if c >= 0:
+                working["update_interval"] = keys[c]
+
+    return changed
 
 
 # ---------------------------------------------------------------------------

@@ -78,6 +78,56 @@ def build_discover_params(entry):
     return params
 
 
+def build_mdblist_list(entry):
+    """
+    Fetch items from a MDBList URL and write items_list_{id}.json.
+
+    Args:
+        entry: list config dict with keys: id, label, mdblist_url, total_items
+
+    Returns:
+        True on success, False on failure.
+    """
+    from resources.lib.mdblist_api import get_mdblist_items
+
+    list_id = entry["id"]
+    label = entry.get("label", str(list_id))
+    url = entry.get("mdblist_url", "")
+    total_items = entry.get("total_items", 50)
+
+    logger.info("list_builder: building mdblist '{}' id={}".format(label, list_id))
+
+    items = get_mdblist_items(url, total_items)
+
+    if not items:
+        logger.warning("list_builder: got 0 items for mdblist id={}".format(list_id))
+
+    output_path = xbmcvfs.translatePath(
+        "special://profile/addon_data/{}/lists/items_list_{}.json".format(ADDON_ID, list_id)
+    )
+
+    try:
+        with xbmcvfs.File(output_path, "w") as f:
+            f.write(json.dumps(items, indent=4))
+        logger.info("list_builder: wrote {} items to {}".format(len(items), output_path))
+        return True
+    except IOError as e:
+        logger.error("list_builder: failed to write items file: {}".format(e))
+        return False
+
+
+def build_entry(entry, api_key=None):
+    """
+    Dispatcher: build any cacheable entry type.
+    - "mdblist":  calls build_mdblist_list(entry) — no api_key needed
+    - "tmdb" / default: calls build_list(entry, api_key)
+    Smartplaylist entries are always dynamic and should never reach this function.
+    """
+    if entry.get("type") == "mdblist":
+        return build_mdblist_list(entry)
+    return build_list(entry, api_key or "")
+
+
 def build_list(entry, api_key):
     """
     Fetch items from TMDb Discover API and write items_list_{id}.json.

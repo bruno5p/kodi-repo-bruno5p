@@ -43,8 +43,7 @@ class UpdateService(xbmc.Monitor):
         api_key, key_source = resolve_api_key(configured_key)
         if not api_key:
             logger.warning("service: no TMDb API key available (install Bingie Helper or configure key in settings)")
-            return
-        if key_source == "bingie":
+        elif key_source == "bingie":
             logger.debug("service: using Bingie Helper API key as fallback")
 
         lists = list_manager.load_lists()
@@ -56,10 +55,15 @@ class UpdateService(xbmc.Monitor):
         failed = 0
         for entry in lists:
             if list_manager.needs_update(entry):
+                entry_type = entry.get("type", "tmdb")
+                if entry_type == "tmdb" and not api_key:
+                    logger.debug("service: skipping tmdb list '{}' — no api key".format(
+                        entry.get("label")))
+                    continue
                 logger.info("service: updating stale list '{}' id={}".format(
                     entry.get("label"), entry.get("id")))
                 try:
-                    success = list_builder.build_list(entry, api_key)
+                    success = list_builder.build_entry(entry, api_key)
                     if success:
                         list_manager.mark_updated(entry["id"])
                         updated += 1
