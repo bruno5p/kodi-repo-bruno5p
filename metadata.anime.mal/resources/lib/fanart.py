@@ -130,6 +130,44 @@ def anidb_to_thetvdb(anidb_id):
     return None
 
 
+def anidb_to_tmdb(anidb_id):
+    """
+    Map an AniDB ID to a TMDB ID using the Anime-Lists XML.
+    Returns (tmdb_id, media_type) where media_type is 'tv' or 'movie',
+    or (None, None) if not found or unmapped.
+
+    Detection:
+      tvdbid == "movie" -> use tmdbid attribute,  media_type = "movie"
+      otherwise         -> use tmdbtv attribute,  media_type = "tv"
+    """
+    root = _load_animelist()
+    if root is None:
+        return None, None
+
+    target = str(anidb_id)
+    for elem in root.iter("anime"):
+        if elem.get("anidbid") == target:
+            tvdbid = elem.get("tvdbid", "")
+            if tvdbid == "movie":
+                tmdb_id = elem.get("tmdbid", "")
+                if tmdb_id and tmdb_id not in ("", "unknown", "0"):
+                    logger.debug(
+                        "fanart: anidb_id={} -> tmdb movie id={}".format(anidb_id, tmdb_id)
+                    )
+                    return tmdb_id, "movie"
+            else:
+                tmdb_id = elem.get("tmdbtv", "")
+                if tmdb_id and tmdb_id not in ("", "unknown", "0"):
+                    logger.debug(
+                        "fanart: anidb_id={} -> tmdb tv id={}".format(anidb_id, tmdb_id)
+                    )
+                    return tmdb_id, "tv"
+            break  # found entry but no valid TMDB ID
+
+    logger.debug("fanart: no TMDB mapping for anidb_id={}".format(anidb_id))
+    return None, None
+
+
 def get_artwork(thetvdb_id, api_key, lang_pref="en"):
     """
     Fetch Fanart.tv artwork for a TV show by TheTVDB ID.
@@ -174,15 +212,40 @@ def get_artwork(thetvdb_id, api_key, lang_pref="en"):
     art = {}
 
     if res.get("showbackground"):
+        raw_bg = res["showbackground"]
+        logger.debug(
+            "fanart: showbackground raw count={} for thetvdb_id={}".format(
+                len(raw_bg), thetvdb_id
+            )
+        )
+        for i in raw_bg:
+            logger.debug(
+                "fanart: bg entry lang={!r} likes={} url={}".format(
+                    i.get("lang", ""), i.get("likes", 0), i.get("url", "")
+                )
+            )
         candidates = [
-            i for i in res["showbackground"]
+            i for i in raw_bg
             if i.get("lang", "") in accepted_langs and i.get("url")
         ]
+        logger.debug(
+            "fanart: showbackground after lang filter ({}) count={}".format(
+                accepted_langs, len(candidates)
+            )
+        )
         if candidates:
             candidates.sort(
                 key=lambda i: (
                     0 if i.get("lang") == lang_pref else 1,
                     -int(i.get("likes") or 0),
+                )
+            )
+            logger.debug(
+                "fanart: showbackground sorted order: {}".format(
+                    [
+                        {"url": i["url"], "lang": i.get("lang", ""), "likes": i.get("likes", 0)}
+                        for i in candidates
+                    ]
                 )
             )
             art["fanart"] = [i["url"] for i in candidates]
