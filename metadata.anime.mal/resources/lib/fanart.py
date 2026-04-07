@@ -174,9 +174,18 @@ def get_artwork(thetvdb_id, api_key, lang_pref="en"):
     art = {}
 
     if res.get("showbackground"):
-        urls = pick_urls("showbackground")
-        if urls:
-            art["fanart"] = urls
+        candidates = [
+            i for i in res["showbackground"]
+            if i.get("lang", "") in accepted_langs and i.get("url")
+        ]
+        if candidates:
+            candidates.sort(
+                key=lambda i: (
+                    0 if i.get("lang") == lang_pref else 1,
+                    -int(i.get("likes") or 0),
+                )
+            )
+            art["fanart"] = [i["url"] for i in candidates]
 
     if res.get("tvthumb"):
         urls = pick_urls("tvthumb")

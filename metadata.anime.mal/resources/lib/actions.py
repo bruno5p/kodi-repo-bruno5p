@@ -277,6 +277,31 @@ def _add_main_episodes(handle, mal_id, lang):
         )
     )
 
+    if not episodes:
+        # Movies, OVAs, and Specials often have no episode entries — synthesize ep 1
+        anime = jikan.get_anime(mal_id)
+        if anime:
+            anime_type = anime.get("type", "unknown")
+            logger.debug(
+                "_add_main_episodes: no episodes for mal_id={} (type={}), "
+                "synthesizing ep 1 from anime metadata".format(mal_id, anime_type)
+            )
+            title = utils.pick_title(anime.get("titles", []), lang) or anime.get("title", "Episode 1")
+            aired = utils.extract_premiered(anime.get("aired")) or ""
+            episode_url = utils.encode_episode_url(mal_id, 1)
+            item = xbmcgui.ListItem(title)
+            tag = item.getVideoInfoTag()
+            tag.setMediaType("episode")
+            tag.setTitle(title)
+            tag.setSeason(1)
+            tag.setEpisode(1)
+            if aired:
+                tag.setFirstAired(aired)
+            xbmcplugin.addDirectoryItem(handle, episode_url, item, isFolder=False)
+        else:
+            logger.warning("_add_main_episodes: no episodes and no anime data for mal_id={}".format(mal_id))
+        return
+
     for idx, ep in enumerate(episodes, start=1):
         ep_num = ep.get("mal_id") or idx
         title = (
@@ -343,6 +368,36 @@ def _resolve_main_episode(handle, mal_id, episode_num, lang):
 
     ep = jikan.get_episode_detail(mal_id, target_num)
     if not ep:
+        # Fallback for movies/OVAs/Specials: use anime-level metadata for ep 1
+        logger.debug(
+            "_resolve_main_episode: no episode detail for ep {} in mal_id={}, "
+            "trying anime-level fallback".format(target_num, mal_id)
+        )
+        anime = jikan.get_anime(mal_id)
+        if anime and target_num == 1:
+            title = utils.pick_title(anime.get("titles", []), lang) or anime.get("title", "Episode 1")
+            aired = utils.extract_premiered(anime.get("aired")) or ""
+            synopsis = anime.get("synopsis", "")
+            duration = _parse_duration(anime.get("duration", ""))
+            logger.debug(
+                '_resolve_main_episode: anime fallback title="{}" aired={} duration={}s'.format(
+                    title, aired, duration
+                )
+            )
+            item = xbmcgui.ListItem(title)
+            tag = item.getVideoInfoTag()
+            tag.setMediaType("episode")
+            tag.setTitle(title)
+            tag.setSeason(1)
+            tag.setEpisode(1)
+            if aired:
+                tag.setFirstAired(aired)
+            if synopsis:
+                tag.setPlot(synopsis)
+            if duration:
+                tag.setDuration(duration)
+            xbmcplugin.setResolvedUrl(handle, True, item)
+            return
         logger.error(
             "_resolve_main_episode: no detail for episode {} in mal_id={}".format(
                 target_num, mal_id
@@ -416,6 +471,7 @@ def getartwork(handle, params):
     tag = item.getVideoInfoTag()
 
     # --- Fanart.tv artwork (clearlogo, clearart, fanart, banner, landscape) ---
+    fanart_list = []  # accumulated across both sources
     fetch_fanart = ADDON.getSetting("fetch_fanart") != "false"
     api_key = ADDON.getSetting("fanarttv_api_key").strip()
     if fetch_fanart and api_key:
@@ -428,8 +484,12 @@ def getartwork(handle, params):
             if thetvdb_id:
                 fanart_art = fanart_mod.get_artwork(thetvdb_id, api_key, lang_pref)
                 for art_type, urls in fanart_art.items():
-                    for url in urls:
-                        tag.addAvailableArtwork(url, art_type)
+                    if art_type == "fanart":
+                        for url in urls:
+                            fanart_list.append({"image": url, "preview": url})
+                    else:
+                        for url in urls:
+                            tag.addAvailableArtwork(url, art_type)
                 logger.debug(
                     "getartwork: added Fanart.tv art types: {}".format(list(fanart_art.keys()))
                 )
@@ -448,7 +508,6 @@ def getartwork(handle, params):
         "getartwork: processing {} Jikan pictures for mal_id={}".format(len(pictures), mal_id)
     )
 
-    fanart_list = []
     for idx, pic in enumerate(pictures):
         large = utils.pick_image_url(pic, prefer_large=True)
         small = utils.pick_image_url(pic, prefer_large=False)
