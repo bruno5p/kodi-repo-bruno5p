@@ -1,9 +1,12 @@
 """
 CRUD operations for lists.json.
 
-lists.json schema — array of:
+lists.json schema — array of one of two shapes:
+
+TMDb Discover list:
 {
     "id": 20261030105754,          # int, YYYYMMDDHHmmss timestamp as unique ID
+    "type": "tmdb",                # omitted on old entries — treated as "tmdb"
     "label": "Top Rated TV Dorama",
     "description": "...",
     "mediatype": "show",           # "show" | "movie"
@@ -24,7 +27,19 @@ lists.json schema — array of:
     }
 }
 
-Note: first_air_date_gte and first_air_date_gte_days are mutually exclusive.
+Smart Playlist Sampler:
+{
+    "id": 20261030105754,
+    "type": "smartplaylist",
+    "label": "My Sampler",
+    "description": "",
+    "playlist_path": "special://userdata/playlists/video/MyList.xsp",
+    "sample_size": 20,
+    "sort_by": "random",           # random | title | year | rating | dateadded
+    "sort_direction": "ascending"  # ascending | descending (ignored for random)
+}
+
+Note (tmdb): first_air_date_gte and first_air_date_gte_days are mutually exclusive.
       When first_air_date_gte_days is set the actual date is computed at build time.
       For movies "first_air_date_gte" maps to "primary_release_date.gte" in the API.
 """
@@ -36,7 +51,7 @@ import xbmcvfs
 
 from resources.lib.logger import logger
 
-ADDON_ID = "script.tmdb.lists"
+ADDON_ID = "plugin.list.builder"
 LISTS_PATH = "special://profile/addon_data/{}/lists.json".format(ADDON_ID)
 LISTS_DIR = "special://profile/addon_data/{}/lists/".format(ADDON_ID)
 DATA_DIR = "special://profile/addon_data/{}/".format(ADDON_ID)
@@ -79,32 +94,53 @@ def save_lists(lists):
         raise
 
 
-def add_list(label, description, mediatype, update_interval, filters):
+def add_list(label, description, list_type="tmdb", mediatype=None, update_interval=30,
+             filters=None, playlist_config=None):
     """
     Create a new list config entry and append it to lists.json.
     Returns the new list entry dict.
+
+    For list_type="tmdb": pass mediatype, update_interval, filters.
+    For list_type="smartplaylist": pass playlist_config dict with keys
+        playlist_path, sample_size, sort_by, sort_direction.
     """
     list_id = int(datetime.now().strftime("%Y%m%d%H%M%S"))
-    entry = {
-        "id": list_id,
-        "label": label,
-        "description": description,
-        "mediatype": mediatype,
-        "update_interval": update_interval,
-        "last_updated": None,
-        "filters": filters,
-    }
+
+    if list_type == "smartplaylist":
+        entry = {
+            "id": list_id,
+            "type": "smartplaylist",
+            "label": label,
+            "description": description,
+            "playlist_path": playlist_config["playlist_path"],
+            "sample_size": playlist_config["sample_size"],
+            "sort_by": playlist_config["sort_by"],
+            "sort_direction": playlist_config["sort_direction"],
+        }
+    else:
+        entry = {
+            "id": list_id,
+            "type": "tmdb",
+            "label": label,
+            "description": description,
+            "mediatype": mediatype,
+            "update_interval": update_interval,
+            "last_updated": None,
+            "filters": filters or {},
+        }
+
     lists = load_lists()
     lists.append(entry)
     save_lists(lists)
-    logger.info("list_manager: added list '{}' id={}".format(label, list_id))
+    logger.info("list_manager: added {} list '{}' id={}".format(list_type, label, list_id))
     return entry
 
 
 def update_list(list_id, updates):
     """
     Merge `updates` dict into the list entry identified by list_id.
-    A "filters" key in updates is merged into entry["filters"] rather than replacing it.
+    For tmdb entries, a "filters" key in updates is merged into entry["filters"]
+    rather than replacing it.
     Raises ValueError if list_id not found.
     """
     lists = load_lists()
@@ -112,7 +148,7 @@ def update_list(list_id, updates):
         if entry["id"] == list_id:
             filters_update = updates.pop("filters", None)
             entry.update(updates)
-            if filters_update is not None:
+            if filters_update is not None and "filters" in entry:
                 entry["filters"].update(filters_update)
             save_lists(lists)
             logger.info("list_manager: updated list id={}".format(list_id))
@@ -151,8 +187,11 @@ def mark_updated(list_id):
 def needs_update(entry):
     """
     Return True if the list should be refreshed.
-    True when: last_updated is None, or today >= last_updated + update_interval days.
+    Smartplaylist entries are always dynamic — never need a cache update.
+    For tmdb entries: True when last_updated is None or age >= update_interval days.
     """
+    if entry.get("type") == "smartplaylist":
+        return False
     last_updated = entry.get("last_updated")
     if last_updated is None:
         return True

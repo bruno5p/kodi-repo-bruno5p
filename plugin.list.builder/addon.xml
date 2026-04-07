@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="script.tmdb.lists" version="1.0.0" name="TMDb Lists" provider-name="bruno5p">
+<addon id="plugin.list.builder" version="1.1.0" name="List Builder" provider-name="bruno5p">
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>
     <import addon="script.module.requests" version="2.9.1"/>
@@ -12,8 +12,8 @@
   </extension>
   <extension point="xbmc.service" library="service.py" start="login"/>
   <extension point="xbmc.addon.metadata">
-    <summary lang="en_GB">TMDb Discovery List Manager</summary>
-    <description lang="en_GB">Create and auto-update curated TV and movie lists using the TMDb Discover API. Manage lists from within Kodi and integrate with Bingie Helper via mdblist_locallist.</description>
+    <summary lang="en_GB">List Builder — TMDb &amp; Smart Playlist Sampler</summary>
+    <description lang="en_GB">Build and browse curated video lists from multiple sources: TMDb Discover API filters, or dynamic samplers from your Kodi smart playlists. Integrates with Bingie Helper via mdblist_locallist.</description>
     <license>GPL-2.0-only</license>
     <platform>all</platform>
   </extension>

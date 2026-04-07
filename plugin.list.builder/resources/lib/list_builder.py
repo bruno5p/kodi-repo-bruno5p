@@ -11,7 +11,7 @@ import xbmcvfs
 from resources.lib.logger import logger
 from resources.lib.tmdb_api import get_discover_items
 
-ADDON_ID = "script.tmdb.lists"
+ADDON_ID = "plugin.list.builder"
 
 # Date field names differ between TV and movie in the TMDb Discover API
 _TV_DATE_FIELD = "first_air_date"

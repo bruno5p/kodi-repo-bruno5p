@@ -1,19 +1,24 @@
 """
-Kodi dialog-based management UI for script.tmdb.lists.
+Kodi dialog-based management UI for plugin.list.builder.
 """
+
+import os
 
 import xbmcgui
 import xbmcaddon
 
 from resources.lib.logger import logger
-from resources.lib import list_manager, list_builder
+from resources.lib import list_manager, list_builder, smartplaylist_reader
 from resources.lib.genres import (
     get_genre_map, ids_to_names,
     SORT_OPTIONS, LANGUAGE_OPTIONS, COUNTRY_OPTIONS,
     INTERVAL_OPTIONS, MEDIATYPE_OPTIONS,
 )
+from resources.lib.smartplaylist_reader import SAMPLER_SORT_OPTIONS
 
 ADDON = xbmcaddon.Addon()
+
+_ADDON_NAME = "List Builder"
 
 
 def _get_api_key():
@@ -34,12 +39,18 @@ def show_management():
 
         menu_items = ["[COLOR yellow]+ Add new list[/COLOR]"]
         for entry in lists:
-            last = entry.get("last_updated") or "never"
-            menu_items.append("{} [COLOR gray]({}, updated: {})[/COLOR]".format(
-                entry["label"], entry["mediatype"], last
-            ))
+            if entry.get("type") == "smartplaylist":
+                playlist_name = os.path.basename(entry.get("playlist_path", "")).replace(".xsp", "")
+                menu_items.append("{} [COLOR gray](sampler: {})[/COLOR]".format(
+                    entry["label"], playlist_name
+                ))
+            else:
+                last = entry.get("last_updated") or "never"
+                menu_items.append("{} [COLOR gray]({}, updated: {})[/COLOR]".format(
+                    entry["label"], entry.get("mediatype", ""), last
+                ))
 
-        choice = xbmcgui.Dialog().select("TMDb Lists Manager", menu_items)
+        choice = xbmcgui.Dialog().select("{} Manager".format(_ADDON_NAME), menu_items)
         if choice < 0:
             return
 
@@ -53,21 +64,32 @@ def show_management():
 
 
 def _show_list_actions(entry):
-    actions = ["Update now", "Edit", "Show widget URL", "Delete"]
-    choice = xbmcgui.Dialog().select(entry["label"], actions)
-    if choice == 0:
-        _run_update(entry)
-    elif choice == 1:
-        show_edit_list(entry)
-    elif choice == 2:
-        show_widget_url(entry)
-    elif choice == 3:
-        _confirm_delete(entry)
+    if entry.get("type") == "smartplaylist":
+        actions = ["Edit", "Delete"]
+        choice = xbmcgui.Dialog().select(entry["label"], actions)
+        if choice == 0:
+            show_edit_smartplaylist(entry)
+        elif choice == 1:
+            _confirm_delete(entry)
+    else:
+        actions = ["Update now", "Edit", "Show widget URL", "Delete"]
+        choice = xbmcgui.Dialog().select(entry["label"], actions)
+        if choice == 0:
+            _run_update(entry)
+        elif choice == 1:
+            show_edit_list(entry)
+        elif choice == 2:
+            show_widget_url(entry)
+        elif choice == 3:
+            _confirm_delete(entry)
 
 
 def _offer_immediate_build(entry):
+    if entry.get("type") == "smartplaylist":
+        return  # dynamic — no build step needed
+
     do_build = xbmcgui.Dialog().yesno(
-        "TMDb Lists",
+        _ADDON_NAME,
         "List '{}' created.[CR]Fetch items now?".format(entry["label"]),
         yeslabel="Yes, fetch",
         nolabel="Later",
@@ -82,20 +104,20 @@ def _run_update(entry):
     api_key = _get_api_key()
     if not api_key:
         xbmcgui.Dialog().notification(
-            "TMDb Lists", "No TMDb API key configured!",
+            _ADDON_NAME, "No TMDb API key configured!",
             xbmcgui.NOTIFICATION_ERROR, 4000,
         )
         return
 
     xbmcgui.Dialog().notification(
-        "TMDb Lists", "Updating: {}".format(entry["label"]),
+        _ADDON_NAME, "Updating: {}".format(entry["label"]),
         xbmcgui.NOTIFICATION_INFO, 2000,
     )
     success = list_builder.build_list(entry, api_key)
     if success:
         list_manager.mark_updated(entry["id"])
         xbmcgui.Dialog().notification(
-            "TMDb Lists", "'{}' updated.".format(entry["label"]),
+            _ADDON_NAME, "'{}' updated.".format(entry["label"]),
             xbmcgui.NOTIFICATION_INFO, 3000,
         )
         updated_lists = list_manager.load_lists()
@@ -103,7 +125,7 @@ def _run_update(entry):
         show_widget_url(updated_entry)
     else:
         xbmcgui.Dialog().notification(
-            "TMDb Lists", "Failed to update '{}'.".format(entry["label"]),
+            _ADDON_NAME, "Failed to update '{}'.".format(entry["label"]),
             xbmcgui.NOTIFICATION_ERROR, 4000,
         )
 
@@ -118,7 +140,7 @@ def _confirm_delete(entry):
     if confirmed:
         list_manager.delete_list(entry["id"])
         xbmcgui.Dialog().notification(
-            "TMDb Lists", "Deleted: {}".format(entry["label"]),
+            _ADDON_NAME, "Deleted: {}".format(entry["label"]),
             xbmcgui.NOTIFICATION_INFO, 2000,
         )
 
@@ -138,12 +160,30 @@ def show_widget_url(entry):
 
 
 # ---------------------------------------------------------------------------
-# Add list — sequential dialogs
+# Add list — choose source type, then branch
 # ---------------------------------------------------------------------------
 
 def show_add_list():
     """
-    Multi-step dialog to create a new list config.
+    Ask the user which kind of list to create, then branch to the appropriate flow.
+    Returns the new list entry dict on success, or None if cancelled.
+    """
+    d = xbmcgui.Dialog()
+    source_choice = d.select("List type", ["TMDb Discover", "Smart Playlist Sampler"])
+    if source_choice < 0:
+        return None
+    if source_choice == 1:
+        return show_add_smartplaylist()
+    return _show_add_tmdb_list()
+
+
+# ---------------------------------------------------------------------------
+# Add TMDb list — sequential dialogs (existing flow)
+# ---------------------------------------------------------------------------
+
+def _show_add_tmdb_list():
+    """
+    Multi-step dialog to create a new TMDb Discover list config.
     Returns the new list entry dict on success, or None if cancelled.
     """
     d = xbmcgui.Dialog()
@@ -230,6 +270,7 @@ def show_add_list():
     return list_manager.add_list(
         label=label,
         description=description,
+        list_type="tmdb",
         mediatype=mediatype,
         update_interval=update_interval,
         filters=filters,
@@ -255,19 +296,80 @@ def _select_genres(dialog, mediatype, prompt, preselected_ids=None):
 
 
 # ---------------------------------------------------------------------------
-# Edit list — menu-based, each field selectable
+# Add Smart Playlist Sampler
+# ---------------------------------------------------------------------------
+
+def show_add_smartplaylist():
+    """
+    Multi-step dialog to create a Smart Playlist Sampler entry.
+    Returns the new list entry dict on success, or None if cancelled.
+    """
+    d = xbmcgui.Dialog()
+
+    label = d.input("Sampler name", defaultt="", type=xbmcgui.INPUT_ALPHANUM)
+    if not label:
+        return None
+
+    playlists = smartplaylist_reader.list_smartplaylists()
+    if not playlists:
+        d.notification(
+            _ADDON_NAME,
+            "No smart playlists found in special://userdata/playlists/video/",
+            xbmcgui.NOTIFICATION_ERROR, 4000,
+        )
+        return None
+
+    pl_names = [p[0] for p in playlists]
+    pl_choice = d.select("Select smart playlist", pl_names)
+    if pl_choice < 0:
+        return None
+    playlist_path = playlists[pl_choice][1]
+
+    size_str = d.input("Sample size", defaultt="20", type=xbmcgui.INPUT_NUMERIC)
+    try:
+        sample_size = int(size_str) if size_str and int(size_str) > 0 else 20
+    except ValueError:
+        sample_size = 20
+
+    sort_choice = d.select("Sort by", [o[0] for o in SAMPLER_SORT_OPTIONS])
+    if sort_choice < 0:
+        return None
+    sort_by = SAMPLER_SORT_OPTIONS[sort_choice][1]
+
+    sort_direction = "ascending"
+    if sort_by != "random":
+        dir_choice = d.select("Order", ["Ascending", "Descending"])
+        if dir_choice < 0:
+            return None
+        sort_direction = "descending" if dir_choice == 1 else "ascending"
+
+    return list_manager.add_list(
+        label=label,
+        description="",
+        list_type="smartplaylist",
+        playlist_config={
+            "playlist_path": playlist_path,
+            "sample_size": sample_size,
+            "sort_by": sort_by,
+            "sort_direction": sort_direction,
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Edit list — TMDb: menu-based, each field selectable
 # ---------------------------------------------------------------------------
 
 def show_edit_list(entry):
     """
-    Menu-based edit dialog. Each field is shown with its current value and
-    can be selected to change. Save/Cancel at the bottom.
+    Menu-based edit dialog for TMDb Discover lists. Each field is shown with its
+    current value and can be selected to change. Save/Cancel at the bottom.
     Returns True if changes were saved.
     """
     working = {
         "label": entry["label"],
         "description": entry.get("description", ""),
-        "mediatype": entry["mediatype"],
+        "mediatype": entry.get("mediatype", "show"),
         "update_interval": entry.get("update_interval", 30),
         "filters": {k: list(v) if isinstance(v, list) else v
                     for k, v in entry.get("filters", {}).items()},
@@ -317,7 +419,7 @@ def show_edit_list(entry):
             })
             changed = True
             xbmcgui.Dialog().notification(
-                "TMDb Lists", "'{}' saved.".format(working["label"]),
+                _ADDON_NAME, "'{}' saved.".format(working["label"]),
                 xbmcgui.NOTIFICATION_INFO, 2000,
             )
             break
@@ -467,3 +569,106 @@ def _edit_year_filter(dialog, filters):
                 filters["first_air_date_gte"] = None
         except ValueError:
             pass
+
+
+# ---------------------------------------------------------------------------
+# Edit Smart Playlist Sampler
+# ---------------------------------------------------------------------------
+
+def show_edit_smartplaylist(entry):
+    """
+    Menu-based edit dialog for Smart Playlist Sampler entries.
+    Returns True if changes were saved.
+    """
+    sort_keys = [o[1] for o in SAMPLER_SORT_OPTIONS]
+
+    working = {
+        "label": entry["label"],
+        "playlist_path": entry.get("playlist_path", ""),
+        "sample_size": entry.get("sample_size", 20),
+        "sort_by": entry.get("sort_by", "random"),
+        "sort_direction": entry.get("sort_direction", "ascending"),
+    }
+
+    changed = False
+
+    while True:
+        playlist_name = os.path.basename(working["playlist_path"]).replace(".xsp", "") or "(none)"
+        sort_label = next((o[0] for o in SAMPLER_SORT_OPTIONS if o[1] == working["sort_by"]), working["sort_by"])
+
+        menu_items = [
+            "Name:           {}".format(working["label"]),
+            "Playlist:       {}".format(playlist_name),
+            "Sample size:    {}".format(working["sample_size"]),
+            "Sort by:        {}".format(sort_label),
+            "Order:          {}".format(working["sort_direction"]),
+            "[COLOR green]Save[/COLOR]",
+            "[COLOR red]Cancel[/COLOR]",
+        ]
+
+        choice = xbmcgui.Dialog().select("Edit sampler: {}".format(working["label"]), menu_items)
+
+        SAVE_IDX = len(menu_items) - 2
+        CANCEL_IDX = len(menu_items) - 1
+
+        if choice < 0 or choice == CANCEL_IDX:
+            break
+
+        if choice == SAVE_IDX:
+            list_manager.update_list(entry["id"], {
+                "label": working["label"],
+                "playlist_path": working["playlist_path"],
+                "sample_size": working["sample_size"],
+                "sort_by": working["sort_by"],
+                "sort_direction": working["sort_direction"],
+            })
+            changed = True
+            xbmcgui.Dialog().notification(
+                _ADDON_NAME, "'{}' saved.".format(working["label"]),
+                xbmcgui.NOTIFICATION_INFO, 2000,
+            )
+            break
+
+        d = xbmcgui.Dialog()
+
+        if choice == 0:
+            val = d.input("Sampler name", defaultt=working["label"], type=xbmcgui.INPUT_ALPHANUM)
+            if val:
+                working["label"] = val
+
+        elif choice == 1:
+            playlists = smartplaylist_reader.list_smartplaylists()
+            if playlists:
+                pl_names = [p[0] for p in playlists]
+                cur_paths = [p[1] for p in playlists]
+                cur_idx = cur_paths.index(working["playlist_path"]) if working["playlist_path"] in cur_paths else 0
+                c = d.select("Select smart playlist", pl_names, preselect=cur_idx)
+                if c >= 0:
+                    working["playlist_path"] = playlists[c][1]
+
+        elif choice == 2:
+            val = d.input("Sample size", defaultt=str(working["sample_size"]), type=xbmcgui.INPUT_NUMERIC)
+            try:
+                if val and int(val) > 0:
+                    working["sample_size"] = int(val)
+            except ValueError:
+                pass
+
+        elif choice == 3:
+            cur_idx = sort_keys.index(working["sort_by"]) if working["sort_by"] in sort_keys else 0
+            c = d.select("Sort by", [o[0] for o in SAMPLER_SORT_OPTIONS], preselect=cur_idx)
+            if c >= 0:
+                working["sort_by"] = SAMPLER_SORT_OPTIONS[c][1]
+
+        elif choice == 4:
+            if working["sort_by"] == "random":
+                d.notification(_ADDON_NAME, "Order is not used with Random sort.",
+                               xbmcgui.NOTIFICATION_INFO, 2000)
+            else:
+                dirs = ["ascending", "descending"]
+                cur_idx = dirs.index(working["sort_direction"]) if working["sort_direction"] in dirs else 0
+                c = d.select("Order", ["Ascending", "Descending"], preselect=cur_idx)
+                if c >= 0:
+                    working["sort_direction"] = dirs[c]
+
+    return changed

@@ -1,16 +1,16 @@
 """
-script.tmdb.lists entry point.
+plugin.list.builder entry point.
 
 Plugin source (browseable in widget configurator):
-  plugin://script.tmdb.lists/               -> root: manage item + all configured lists
-  plugin://script.tmdb.lists/?list_id=<id>  -> items for one list (for widgets)
-  plugin://script.tmdb.lists/?action=manage -> opens management UI
+  plugin://plugin.list.builder/               -> root: manage item + all configured lists
+  plugin://plugin.list.builder/?list_id=<id>  -> items for one list (for widgets)
+  plugin://plugin.list.builder/?action=manage -> opens management UI
 
 Script actions (RunScript):
-  RunScript(script.tmdb.lists)                      -> open management UI
-  RunScript(script.tmdb.lists,update_all)            -> update all stale lists silently
-  RunScript(script.tmdb.lists,update_list,<list_id>) -> update a specific list
-  RunScript(script.tmdb.lists,show_url,<list_id>)    -> show widget URL for a list
+  RunScript(plugin.list.builder)                      -> open management UI
+  RunScript(plugin.list.builder,update_all)            -> update all stale lists silently
+  RunScript(plugin.list.builder,update_list,<list_id>) -> update a specific list
+  RunScript(plugin.list.builder,show_url,<list_id>)    -> show widget URL for a list
 """
 
 import sys
@@ -29,13 +29,13 @@ def _plugin_root(handle):
     manage_li = xbmcgui.ListItem(label="[Manage Lists...]")
     manage_li.setInfo("video", {"title": "[Manage Lists...]"})
     xbmcplugin.addDirectoryItem(
-        handle, "plugin://script.tmdb.lists/?action=manage", manage_li, isFolder=True
+        handle, "plugin://plugin.list.builder/?action=manage", manage_li, isFolder=True
     )
 
     lists = list_manager.load_lists()
     for entry in lists:
         label = entry.get("label", str(entry["id"]))
-        url = "plugin://script.tmdb.lists/?list_id={}".format(entry["id"])
+        url = "plugin://plugin.list.builder/?list_id={}".format(entry["id"])
         li = xbmcgui.ListItem(label=label)
         li.setInfo("video", {"title": label})
         xbmcplugin.addDirectoryItem(handle, url, li, isFolder=True)
@@ -44,6 +44,21 @@ def _plugin_root(handle):
 
 
 def _plugin_list_items(handle, list_id):
+    """Serve items for a list — from pre-built JSON (TMDb) or live query (smartplaylist)."""
+    import xbmcgui
+    import xbmcplugin
+    from resources.lib import list_manager
+
+    lists = list_manager.load_lists()
+    entry = next((e for e in lists if e["id"] == list_id), None)
+
+    if entry and entry.get("type") == "smartplaylist":
+        _plugin_smartplaylist_items(handle, entry)
+    else:
+        _plugin_tmdb_items(handle, list_id)
+
+
+def _plugin_tmdb_items(handle, list_id):
     """Serve items from the pre-built items JSON so skins can display the widget."""
     import json
     import xbmcgui
@@ -93,6 +108,52 @@ def _plugin_list_items(handle, list_id):
     xbmcplugin.endOfDirectory(handle, succeeded=True)
 
 
+def _plugin_smartplaylist_items(handle, entry):
+    """Serve a live sample from a Kodi smart playlist, plus a 'View full list' link."""
+    import xbmcgui
+    import xbmcplugin
+    from resources.lib import smartplaylist_reader
+
+    xbmcplugin.setContent(handle, "videos")
+
+    items = smartplaylist_reader.get_playlist_items(
+        entry["playlist_path"],
+        entry.get("sample_size", 20),
+        entry.get("sort_by", "random"),
+        entry.get("sort_direction", "ascending"),
+    )
+
+    kodi_type_map = {"movie": "movie", "tvshow": "tvshow", "episode": "episode"}
+
+    for item in items:
+        title = item.get("title", "")
+        mediatype = item.get("mediatype", "unknown")
+        kodi_type = kodi_type_map.get(mediatype, "video")
+        file_url = item.get("file", "")
+
+        li = xbmcgui.ListItem(label=title)
+        info = {"title": title}
+        if kodi_type in kodi_type_map.values():
+            info["mediatype"] = kodi_type
+        year = item.get("year")
+        if year:
+            info["year"] = year
+        li.setInfo("video", info)
+
+        art = item.get("art", {})
+        if art:
+            li.setArt(art)
+
+        xbmcplugin.addDirectoryItem(handle, file_url, li, isFolder=item.get("is_folder", False))
+
+    # "View full list" entry — opens the smart playlist in Kodi's library browser
+    full_list_li = xbmcgui.ListItem(label="[COLOR yellow]→ View full list[/COLOR]")
+    full_list_li.setInfo("video", {"title": "View full list"})
+    xbmcplugin.addDirectoryItem(handle, entry["playlist_path"], full_list_li, isFolder=True)
+
+    xbmcplugin.endOfDirectory(handle, succeeded=True)
+
+
 if __name__ == "__main__":
 
     if sys.argv[0].startswith("plugin://"):
@@ -110,7 +171,7 @@ if __name__ == "__main__":
             if action == "manage":
                 # Launch the management script and return an empty (cancelled) directory
                 import xbmc
-                xbmc.executebuiltin("RunScript(script.tmdb.lists,show_lists)")
+                xbmc.executebuiltin("RunScript(plugin.list.builder,show_lists)")
                 import xbmcplugin
                 xbmcplugin.endOfDirectory(handle, succeeded=False)
 
@@ -124,7 +185,7 @@ if __name__ == "__main__":
                 _plugin_root(handle)
 
     else:
-        # Script mode — RunScript(script.tmdb.lists, ...)
+        # Script mode — RunScript(plugin.list.builder, ...)
         action = sys.argv[1] if len(sys.argv) > 1 else ""
         list_id_arg = sys.argv[2] if len(sys.argv) > 2 else ""
 
@@ -144,7 +205,7 @@ if __name__ == "__main__":
             api_key, key_source = resolve_api_key(configured_key)
             if not api_key:
                 xbmcgui.Dialog().notification(
-                    "TMDb Lists", "No TMDb API key available (install Bingie Helper or set key in settings)",
+                    "List Builder", "No TMDb API key available (install Bingie Helper or set key in settings)",
                     xbmcgui.NOTIFICATION_ERROR, 4000,
                 )
             else:
@@ -157,7 +218,7 @@ if __name__ == "__main__":
                             list_manager.mark_updated(entry["id"])
                             updated += 1
                 xbmcgui.Dialog().notification(
-                    "TMDb Lists", "Updated {} list(s).".format(updated),
+                    "List Builder", "Updated {} list(s).".format(updated),
                     xbmcgui.NOTIFICATION_INFO, 3000,
                 )
 

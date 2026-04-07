@@ -1,7 +1,8 @@
 """
-Auto-update service for script.tmdb.lists.
-Runs once at Kodi startup (after login), checks all lists, updates stale ones.
+Auto-update service for plugin.list.builder.
+Runs once at Kodi startup (after login), checks all TMDb lists, updates stale ones.
 Re-checks hourly to cover long sessions and daily-interval lists.
+Smartplaylist sampler entries are always dynamic and are skipped.
 """
 
 import xbmc
@@ -15,7 +16,7 @@ from resources.lib.tmdb_api import resolve_api_key
 class UpdateService(xbmc.Monitor):
 
     def run(self):
-        logger.info("service: TMDb Lists service started")
+        logger.info("service: List Builder service started")
 
         # Wait for Kodi to finish loading before network calls
         self.waitForAbort(5)
@@ -28,7 +29,7 @@ class UpdateService(xbmc.Monitor):
         while not self.waitForAbort(3600):
             self._do_update_pass()
 
-        logger.info("service: TMDb Lists service stopping")
+        logger.info("service: List Builder service stopping")
 
     def _do_update_pass(self):
         """Check all lists and update any that are stale."""

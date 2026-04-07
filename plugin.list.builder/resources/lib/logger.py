@@ -2,7 +2,7 @@ import xbmc
 import xbmcaddon
 
 _ADDON = xbmcaddon.Addon()
-ADDON_ID = "script.tmdb.lists"
+ADDON_ID = "plugin.list.builder"
 
 # Python 2/3 compat: in Python 2 there is a separate unicode type; in Python 3 str is always unicode.
 try:
