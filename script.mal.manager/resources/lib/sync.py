@@ -144,17 +144,19 @@ def sync_from_mal(on_progress=None, is_cancelled=None):
         if on_progress:
             on_progress(i, total, item["title"])
 
-        if item["watched"]:
-            # Already watched locally — nothing to update
-            skipped += 1
-            continue
-
         mal_status_data = mal_api.get_anime_list_status(item["mal_id"])
         if mal_status_data is None:
             skipped += 1
             continue
 
-        if mal_status_data.get("status") == mal_api.STATUS_COMPLETED:
+        mal_status = mal_status_data.get("status")
+        mal_watched_ep = mal_status_data.get("num_episodes_watched", 0) or 0
+
+        logger.info("sync_from_mal: '{}' (mal_id={}) type={} mal_status={} mal_ep={} kodi_ep={} kodi_watched={}".format(
+            item["title"], item["mal_id"], item["type"],
+            mal_status, mal_watched_ep, item["watched_episodes"], item["watched"]))
+
+        if mal_status == mal_api.STATUS_COMPLETED and not item["watched"]:
             logger.info("sync_from_mal: '{}' (mal_id={}) completed on MAL, updating Kodi".format(
                 item["title"], item["mal_id"]))
             try:
@@ -163,7 +165,19 @@ def sync_from_mal(on_progress=None, is_cancelled=None):
             except Exception as exc:
                 logger.error("sync_from_mal: failed to update '{}': {}".format(item["title"], exc))
                 errors += 1
+        elif (mal_status == mal_api.STATUS_WATCHING
+              and item["type"] == "tvshow"
+              and mal_watched_ep > item["watched_episodes"]):
+            logger.info("sync_from_mal: '{}' (mal_id={}) watching on MAL ({} ep), Kodi has {}, updating".format(
+                item["title"], item["mal_id"], mal_watched_ep, item["watched_episodes"]))
+            try:
+                _mark_kodi_episodes_watched(item, mal_watched_ep)
+                updated += 1
+            except Exception as exc:
+                logger.error("sync_from_mal: failed to update '{}': {}".format(item["title"], exc))
+                errors += 1
         else:
+            logger.info("sync_from_mal: '{}' skipped (no condition matched)".format(item["title"]))
             skipped += 1
 
     logger.info("sync_from_mal: done — updated={} skipped={} errors={}".format(updated, skipped, errors))
@@ -190,28 +204,81 @@ def sync_to_mal(on_progress=None, is_cancelled=None):
         if on_progress:
             on_progress(i, total, item["title"])
 
-        if not item["watched"]:
-            # Not watched locally — nothing to push
+        kodi_watched_ep = item["watched_episodes"]
+
+        if kodi_watched_ep == 0:
+            # Nothing watched locally — nothing to push
             skipped += 1
             continue
 
         mal_status_data = mal_api.get_anime_list_status(item["mal_id"])
-        if mal_status_data and mal_status_data.get("status") == mal_api.STATUS_COMPLETED:
-            # Already completed on MAL — no need to update
-            skipped += 1
-            continue
+        mal_status = mal_status_data.get("status") if mal_status_data else None
+        mal_watched_ep = (mal_status_data.get("num_episodes_watched", 0) or 0) if mal_status_data else 0
 
-        logger.info("sync_to_mal: '{}' (mal_id={}) watched locally, updating MAL to completed".format(
-            item["title"], item["mal_id"]))
-        result = mal_api.update_anime_status(item["mal_id"], status=mal_api.STATUS_COMPLETED)
-        if result:
-            updated += 1
+        if item["watched"]:
+            # All episodes watched — push completed
+            if mal_status == mal_api.STATUS_COMPLETED:
+                skipped += 1
+                continue
+            logger.info("sync_to_mal: '{}' (mal_id={}) fully watched, updating MAL to completed".format(
+                item["title"], item["mal_id"]))
+            result = mal_api.update_anime_status(item["mal_id"], status=mal_api.STATUS_COMPLETED)
+            if result:
+                updated += 1
+            else:
+                logger.error("sync_to_mal: failed to update '{}' on MAL".format(item["title"]))
+                errors += 1
+        elif item["type"] == "tvshow" and kodi_watched_ep > mal_watched_ep:
+            # Partially watched — push episode count as watching
+            logger.info("sync_to_mal: '{}' (mal_id={}) partial Kodi={} MAL={}, updating MAL watching".format(
+                item["title"], item["mal_id"], kodi_watched_ep, mal_watched_ep))
+            result = mal_api.update_anime_status(
+                item["mal_id"],
+                status=mal_api.STATUS_WATCHING,
+                num_watched=kodi_watched_ep,
+            )
+            if result:
+                updated += 1
+            else:
+                logger.error("sync_to_mal: failed to update '{}' on MAL".format(item["title"]))
+                errors += 1
         else:
-            logger.error("sync_to_mal: failed to update '{}' on MAL".format(item["title"]))
-            errors += 1
+            skipped += 1
 
     logger.info("sync_to_mal: done — updated={} skipped={} errors={}".format(updated, skipped, errors))
     return updated, skipped, errors
+
+
+def _mark_kodi_episodes_watched(item, n):
+    """
+    Mark exactly the first *n* regular episodes (season > 0, sorted by season
+    then episode number) as watched, and all others as unwatched.
+    Specials (season 0) are left untouched.
+    """
+    result = _rpc("VideoLibrary.GetEpisodes", {
+        "tvshowid": item["kodi_id"],
+        "properties": ["season", "episode", "playcount"],
+    })
+    if not result or "episodes" not in result:
+        return
+
+    regular = sorted(
+        [e for e in result["episodes"] if e.get("season", 0) > 0],
+        key=lambda e: (e.get("season", 0), e.get("episode", 0)),
+    )
+
+    watched_ids = {e["episodeid"] for e in regular[:n]}
+
+    for ep in regular:
+        target = 1 if ep["episodeid"] in watched_ids else 0
+        if ep.get("playcount", 0) != target:
+            _rpc("VideoLibrary.SetEpisodeDetails", {
+                "episodeid": ep["episodeid"],
+                "playcount": target,
+            })
+
+    logger.debug("sync: tvshow '{}' first {}/{} episodes marked watched".format(
+        item["title"], n, len(regular)))
 
 
 def _mark_kodi_unwatched(item):
@@ -263,15 +330,26 @@ def force_sync_from_mal(on_progress=None, is_cancelled=None):
             skipped += 1
             continue
 
-        mal_completed = mal_status_data.get("status") == mal_api.STATUS_COMPLETED
+        mal_status = mal_status_data.get("status")
+        mal_watched_ep = mal_status_data.get("num_episodes_watched", 0) or 0
 
         try:
-            if mal_completed and not item["watched"]:
-                logger.info("force_sync_from_mal: '{}' (mal_id={}) marking Kodi watched".format(
-                    item["title"], item["mal_id"]))
-                _mark_kodi_watched(item)
+            if mal_status == mal_api.STATUS_COMPLETED:
+                if not item["watched"]:
+                    logger.info("force_sync_from_mal: '{}' (mal_id={}) marking Kodi watched".format(
+                        item["title"], item["mal_id"]))
+                    _mark_kodi_watched(item)
+                    updated += 1
+                else:
+                    skipped += 1
+            elif (mal_status == mal_api.STATUS_WATCHING
+                  and item["type"] == "tvshow"
+                  and mal_watched_ep != item["watched_episodes"]):
+                logger.info("force_sync_from_mal: '{}' (mal_id={}) setting Kodi to {} ep watched".format(
+                    item["title"], item["mal_id"], mal_watched_ep))
+                _mark_kodi_episodes_watched(item, mal_watched_ep)
                 updated += 1
-            elif not mal_completed and item["watched"]:
+            elif mal_status not in (mal_api.STATUS_COMPLETED, mal_api.STATUS_WATCHING) and item["watched"]:
                 logger.info("force_sync_from_mal: '{}' (mal_id={}) marking Kodi unwatched".format(
                     item["title"], item["mal_id"]))
                 _mark_kodi_unwatched(item)
