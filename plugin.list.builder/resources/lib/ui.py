@@ -44,6 +44,8 @@ def show_management():
                 menu_items.append("{} [COLOR gray](sampler: {})[/COLOR]".format(
                     entry["label"], playlist_name
                 ))
+            elif entry.get("type") == "otaku_combined":
+                menu_items.append("{} [COLOR gray](combined watching)[/COLOR]".format(entry["label"]))
             elif entry.get("type") == "mdblist":
                 last = entry.get("last_updated") or "never"
                 menu_items.append("{} [COLOR gray](mdblist, updated: {})[/COLOR]".format(
@@ -76,6 +78,15 @@ def _show_list_actions(entry):
             show_edit_smartplaylist(entry)
         elif choice == 1:
             _confirm_delete(entry)
+    elif entry.get("type") == "otaku_combined":
+        actions = ["Edit", "Show widget URL", "Delete"]
+        choice = xbmcgui.Dialog().select(entry["label"], actions)
+        if choice == 0:
+            _show_edit_otaku_combined(entry)
+        elif choice == 1:
+            show_widget_url(entry)
+        elif choice == 2:
+            _confirm_delete(entry)
     elif entry.get("type") == "mdblist":
         actions = ["Update now", "Edit", "Show widget URL", "Delete"]
         choice = xbmcgui.Dialog().select(entry["label"], actions)
@@ -101,7 +112,7 @@ def _show_list_actions(entry):
 
 
 def _offer_immediate_build(entry):
-    if entry.get("type") == "smartplaylist":
+    if entry.get("type") in ("smartplaylist", "otaku_combined"):
         return  # dynamic — no build step needed
 
     do_build = xbmcgui.Dialog().yesno(
@@ -189,13 +200,17 @@ def show_add_list():
     Returns the new list entry dict on success, or None if cancelled.
     """
     d = xbmcgui.Dialog()
-    source_choice = d.select("List type", ["TMDb Discover", "Smart Playlist Sampler", "MDBList"])
+    source_choice = d.select("List type", [
+        "TMDb Discover", "Smart Playlist Sampler", "MDBList", "Otaku Combined Watching",
+    ])
     if source_choice < 0:
         return None
     if source_choice == 1:
         return show_add_smartplaylist()
     if source_choice == 2:
         return _show_add_mdblist()
+    if source_choice == 3:
+        return _show_add_otaku_combined()
     return _show_add_tmdb_list()
 
 
@@ -358,6 +373,32 @@ def _show_add_mdblist():
         update_interval=update_interval,
         mdblist_config={"mdblist_url": url, "total_items": total_items},
     )
+
+
+def _show_add_otaku_combined():
+    """
+    Create an Otaku Combined Watching list (just asks for a name — sources are fixed).
+    Returns the new list entry dict on success, or None if cancelled.
+    """
+    label = xbmcgui.Dialog().input(
+        "List name", defaultt="Currently Watching", type=xbmcgui.INPUT_ALPHANUM
+    )
+    if not label:
+        return None
+    return list_manager.add_list(label=label, description="", list_type="otaku_combined")
+
+
+def _show_edit_otaku_combined(entry):
+    """Rename an Otaku Combined Watching list."""
+    val = xbmcgui.Dialog().input(
+        "List name", defaultt=entry["label"], type=xbmcgui.INPUT_ALPHANUM
+    )
+    if val and val != entry["label"]:
+        list_manager.update_list(entry["id"], {"label": val})
+        xbmcgui.Dialog().notification(
+            _ADDON_NAME, "'{}' saved.".format(val),
+            xbmcgui.NOTIFICATION_INFO, 2000,
+        )
 
 
 def show_edit_mdblist(entry):

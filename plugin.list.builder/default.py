@@ -32,7 +32,7 @@ def _plugin_root(handle):
         handle, "plugin://plugin.list.builder/?action=manage", manage_li, isFolder=True
     )
 
-    lists = list_manager.load_lists()
+    lists = sorted(list_manager.load_lists(), key=lambda e: e.get("label", "").lower())
     for entry in lists:
         label = entry.get("label", str(entry["id"]))
         url = "plugin://plugin.list.builder/?list_id={}".format(entry["id"])
@@ -54,6 +54,8 @@ def _plugin_list_items(handle, list_id):
 
     if entry and entry.get("type") == "smartplaylist":
         _plugin_smartplaylist_items(handle, entry)
+    elif entry and entry.get("type") == "otaku_combined":
+        _plugin_otaku_combined_items(handle, entry)
     else:
         _plugin_tmdb_items(handle, list_id)
 
@@ -104,6 +106,42 @@ def _plugin_tmdb_items(handle, list_id):
             li.setArt({"poster": "https://image.tmdb.org/t/p/w500{}".format(poster_path)})
 
         xbmcplugin.addDirectoryItem(handle, url, li, isFolder=True)
+
+    xbmcplugin.endOfDirectory(handle, succeeded=True)
+
+
+def _plugin_otaku_combined_items(handle, entry):
+    """Serve a live combined watching list from local library + Otaku plugin sources."""
+    import xbmcgui
+    import xbmcplugin
+    from resources.lib import otaku_combined
+
+    xbmcplugin.setContent(handle, "tvshows")
+
+    items = otaku_combined.get_combined_items()
+
+    for item in items:
+        title = item.get("title", "")
+        file_url = item.get("file", "")
+
+        li = xbmcgui.ListItem(label=title)
+        info = {"title": title, "mediatype": "tvshow"}
+        year = item.get("year")
+        if year:
+            info["year"] = year
+        rating = item.get("rating")
+        if rating:
+            info["rating"] = rating
+        tvshowid = item.get("tvshowid")
+        if tvshowid:
+            info["dbid"] = tvshowid
+        li.setInfo("video", info)
+
+        art = item.get("art") or {}
+        if art:
+            li.setArt(art)
+
+        xbmcplugin.addDirectoryItem(handle, file_url, li, isFolder=True)
 
     xbmcplugin.endOfDirectory(handle, succeeded=True)
 

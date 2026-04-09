@@ -51,6 +51,14 @@ MDBList list:
     "last_updated": null          # ISO date string or null
 }
 
+Otaku Combined Watching:
+{
+    "id": 20261030105754,
+    "type": "otaku_combined",
+    "label": "Currently Watching",
+    "description": ""
+}
+
 Note (tmdb): first_air_date_gte and first_air_date_gte_days are mutually exclusive.
       When first_air_date_gte_days is set the actual date is computed at build time.
       For movies "first_air_date_gte" maps to "primary_release_date.gte" in the API.
@@ -128,6 +136,13 @@ def add_list(label, description, list_type="tmdb", mediatype=None, update_interv
             "sample_size": playlist_config["sample_size"],
             "sort_by": playlist_config["sort_by"],
             "sort_direction": playlist_config["sort_direction"],
+        }
+    elif list_type == "otaku_combined":
+        entry = {
+            "id": list_id,
+            "type": "otaku_combined",
+            "label": label,
+            "description": description,
         }
     elif list_type == "mdblist":
         entry = {
@@ -213,7 +228,7 @@ def needs_update(entry):
     Smartplaylist entries are always dynamic — never need a cache update.
     For tmdb entries: True when last_updated is None or age >= update_interval days.
     """
-    if entry.get("type") == "smartplaylist":
+    if entry.get("type") in ("smartplaylist", "otaku_combined"):
         return False
     last_updated = entry.get("last_updated")
     if last_updated is None:
@@ -233,10 +248,12 @@ def get_items_path(list_id):
 
 def get_widget_url(entry):
     """
-    Build the Bingie mdblist_locallist plugin URL for the given list entry.
-    The &&-separated second segment is the special:// path.
-    Bingie's router does unquote_plus() on each secondary param so plain
-    special:// paths round-trip correctly without encoding.
+    Build the widget URL for the given list entry.
+    Dynamic types (smartplaylist, otaku_combined) are served directly by this
+    plugin; cached types (tmdb, mdblist) are routed through Bingie's
+    mdblist_locallist handler.
     """
+    if entry.get("type") in ("smartplaylist", "otaku_combined"):
+        return "plugin://plugin.list.builder/?list_id={}".format(entry["id"])
     path = get_items_path(entry["id"])
     return "plugin://plugin.video.tmdb.bingie.helper/?info=mdblist_locallist&&{}".format(path)
