@@ -118,7 +118,7 @@ def _plugin_otaku_combined_items(handle, entry):
 
     xbmcplugin.setContent(handle, "tvshows")
 
-    items = otaku_combined.get_combined_items()
+    items = otaku_combined.get_combined_items(entry)
 
     for item in items:
         title = item.get("title", "")

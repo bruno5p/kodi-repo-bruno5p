@@ -126,15 +126,23 @@ def _fetch_plugin_watching(plugin_url, source_name):
     return seen
 
 
-def get_combined_items():
+def get_combined_items(entry=None):
     """
-    Fetch all three sources, deduplicate by MAL ID, return merged item list.
+    Fetch enabled sources, deduplicate by MAL ID, return merged item list.
     Priority: local > otaku watchlist > MAL watch history.
     Sorted by lastplayed descending.
+
+    entry: optional list config dict — reads entry["sources"] for per-source toggles.
+           Missing keys default to True (enabled).
     """
-    local   = _fetch_local_watching()
-    otaku   = _fetch_plugin_watching(_OTAKU_WATCHING_URL, "otaku_watching")
-    history = _fetch_plugin_watching(_MAL_HISTORY_URL, "mal_history")
+    sources = (entry or {}).get("sources", {})
+    include_local  = sources.get("local", True)
+    include_otaku  = sources.get("otaku_watching", True)
+    include_mal    = sources.get("mal_watching", True)
+
+    local   = _fetch_local_watching() if include_local else {}
+    otaku   = _fetch_plugin_watching(_OTAKU_WATCHING_URL, "otaku_watching") if include_otaku else {}
+    history = _fetch_plugin_watching(_MAL_HISTORY_URL, "mal_history") if include_mal else {}
 
     merged = {}
     # lowest priority first so higher-priority sources overwrite

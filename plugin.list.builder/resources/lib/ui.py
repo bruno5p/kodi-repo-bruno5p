@@ -35,7 +35,7 @@ def show_management():
     Loops until the user cancels.
     """
     while True:
-        lists = list_manager.load_lists()
+        lists = sorted(list_manager.load_lists(), key=lambda e: e.get("label", "").lower())
 
         menu_items = ["[COLOR yellow]+ Add new list[/COLOR]"]
         for entry in lists:
@@ -375,30 +375,80 @@ def _show_add_mdblist():
     )
 
 
+_OTAKU_SOURCE_OPTIONS = [
+    ("Local library (in-progress)", "local"),
+    ("Otaku watch history",         "otaku_watching"),
+    ("MAL watching list",           "mal_watching"),
+]
+
+
 def _show_add_otaku_combined():
     """
-    Create an Otaku Combined Watching list (just asks for a name — sources are fixed).
+    Create an Otaku Combined Watching list. Asks for a name then which sources to include.
     Returns the new list entry dict on success, or None if cancelled.
     """
-    label = xbmcgui.Dialog().input(
-        "List name", defaultt="Currently Watching", type=xbmcgui.INPUT_ALPHANUM
-    )
+    d = xbmcgui.Dialog()
+    label = d.input("List name", defaultt="Currently Watching", type=xbmcgui.INPUT_ALPHANUM)
     if not label:
         return None
-    return list_manager.add_list(label=label, description="", list_type="otaku_combined")
+
+    result = d.multiselect(
+        "Include sources (all selected by default)",
+        [s[0] for s in _OTAKU_SOURCE_OPTIONS],
+        preselect=[0, 1, 2],
+    )
+    if result is None:
+        return None
+
+    sources = {key: (i in result) for i, (_, key) in enumerate(_OTAKU_SOURCE_OPTIONS)}
+    return list_manager.add_list(
+        label=label, description="", list_type="otaku_combined",
+        otaku_config={"sources": sources},
+    )
 
 
 def _show_edit_otaku_combined(entry):
-    """Rename an Otaku Combined Watching list."""
-    val = xbmcgui.Dialog().input(
-        "List name", defaultt=entry["label"], type=xbmcgui.INPUT_ALPHANUM
-    )
-    if val and val != entry["label"]:
-        list_manager.update_list(entry["id"], {"label": val})
-        xbmcgui.Dialog().notification(
-            _ADDON_NAME, "'{}' saved.".format(val),
-            xbmcgui.NOTIFICATION_INFO, 2000,
-        )
+    """Menu-based edit for Otaku Combined Watching — rename + toggle each source."""
+    working = {
+        "label": entry["label"],
+        "sources": dict(entry.get("sources", {key: True for _, key in _OTAKU_SOURCE_OPTIONS})),
+    }
+
+    while True:
+        menu_items = ["Name:  {}".format(working["label"])]
+        for src_label, key in _OTAKU_SOURCE_OPTIONS:
+            status = "[COLOR green]on[/COLOR]" if working["sources"].get(key, True) else "[COLOR red]off[/COLOR]"
+            menu_items.append("{}:  {}".format(src_label, status))
+        menu_items += ["[COLOR green]Save[/COLOR]", "[COLOR red]Cancel[/COLOR]"]
+
+        SAVE_IDX = len(menu_items) - 2
+        CANCEL_IDX = len(menu_items) - 1
+
+        choice = xbmcgui.Dialog().select("Edit: {}".format(working["label"]), menu_items)
+
+        if choice < 0 or choice == CANCEL_IDX:
+            break
+
+        if choice == SAVE_IDX:
+            list_manager.update_list(entry["id"], {
+                "label": working["label"],
+                "sources": working["sources"],
+            })
+            xbmcgui.Dialog().notification(
+                _ADDON_NAME, "'{}' saved.".format(working["label"]),
+                xbmcgui.NOTIFICATION_INFO, 2000,
+            )
+            break
+
+        if choice == 0:
+            val = xbmcgui.Dialog().input(
+                "List name", defaultt=working["label"], type=xbmcgui.INPUT_ALPHANUM
+            )
+            if val:
+                working["label"] = val
+        elif 1 <= choice <= len(_OTAKU_SOURCE_OPTIONS):
+            key = _OTAKU_SOURCE_OPTIONS[choice - 1][1]
+            working["sources"][key] = not working["sources"].get(key, True)
 
 
 def show_edit_mdblist(entry):

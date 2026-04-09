@@ -115,7 +115,7 @@ def save_lists(lists):
 
 
 def add_list(label, description, list_type="tmdb", mediatype=None, update_interval=30,
-             filters=None, playlist_config=None, mdblist_config=None):
+             filters=None, playlist_config=None, mdblist_config=None, otaku_config=None):
     """
     Create a new list config entry and append it to lists.json.
     Returns the new list entry dict.
@@ -138,11 +138,13 @@ def add_list(label, description, list_type="tmdb", mediatype=None, update_interv
             "sort_direction": playlist_config["sort_direction"],
         }
     elif list_type == "otaku_combined":
+        default_sources = {"local": True, "otaku_watching": True, "mal_watching": True}
         entry = {
             "id": list_id,
             "type": "otaku_combined",
             "label": label,
             "description": description,
+            "sources": (otaku_config or {}).get("sources", default_sources),
         }
     elif list_type == "mdblist":
         entry = {
