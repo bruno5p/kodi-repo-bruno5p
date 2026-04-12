@@ -146,3 +146,61 @@ def get_discover_items(mediatype, params, total_items, api_key):
 
     logger.info("tmdb_api: fetched {} items for mediatype={}".format(len(items), mediatype))
     return items
+
+
+def _fetch_poster_path(item, api_key):
+    """Fetch poster_path for a single item from TMDb details endpoint."""
+    tmdb_id = item.get("id")
+    mediatype = item.get("mediatype", "movie")
+    endpoint_type = "tv" if mediatype == "show" else "movie"
+    url = "{}/{}/{}".format(TMDB_BASE_URL, endpoint_type, tmdb_id)
+    try:
+        response = requests.get(url, params={"api_key": api_key}, timeout=10)
+        response.raise_for_status()
+        return response.json().get("poster_path")
+    except requests.RequestException as e:
+        logger.debug("tmdb_api: failed to fetch poster for id={}: {}".format(tmdb_id, e))
+        return None
+
+
+def enrich_poster_paths(items, api_key, max_workers=10):
+    """
+    Fetch and fill poster_path for items that have a TMDb ID but no poster_path.
+    Uses a thread pool for parallel requests.
+    Only calls the TMDb API for items where poster_path is None or empty.
+    """
+    needs_poster = [(i, item) for i, item in enumerate(items)
+                    if item.get("id") and not item.get("poster_path")]
+
+    if not needs_poster:
+        return items
+
+    logger.info("tmdb_api: enriching poster_path for {} items".format(len(needs_poster)))
+
+    try:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def fetch(idx_item):
+            idx, item = idx_item
+            return idx, _fetch_poster_path(item, api_key)
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(fetch, idx_item) for idx_item in needs_poster]
+            for future in as_completed(futures):
+                try:
+                    idx, poster_path = future.result()
+                    if poster_path:
+                        items[idx]["poster_path"] = poster_path
+                except Exception as e:
+                    logger.debug("tmdb_api: poster enrich error: {}".format(e))
+
+    except ImportError:
+        # Fallback: sequential (Python 2 / restricted environments)
+        for idx, item in needs_poster:
+            poster_path = _fetch_poster_path(item, api_key)
+            if poster_path:
+                items[idx]["poster_path"] = poster_path
+
+    enriched = sum(1 for i, _ in needs_poster if items[i].get("poster_path"))
+    logger.info("tmdb_api: enriched {}/{} items with poster_path".format(enriched, len(needs_poster)))
+    return items

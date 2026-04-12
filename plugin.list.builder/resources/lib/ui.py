@@ -24,6 +24,54 @@ ADDON = xbmcaddon.Addon()
 
 _ADDON_NAME = "List Builder"
 
+_DATE_MODE_OPTIONS = [
+    ("No date filter",             ""),
+    ("Static date (YYYY-MM-DD)",   "static"),
+    ("Last N months (dynamic)",    "last_months"),
+    ("Last N years (dynamic)",     "last_years"),
+]
+_DATE_MODE_KEYS = [o[1] for o in _DATE_MODE_OPTIONS]
+
+
+def _ask_date_filter(d, prompt, current_mode, current_static, current_n):
+    """
+    Two-step dialog: pick mode, then enter value if needed.
+    Returns (mode, static_date, n).
+    Cancelled sub-dialog keeps the current value unchanged.
+    """
+    preselect = _DATE_MODE_KEYS.index(current_mode) if current_mode in _DATE_MODE_KEYS else 0
+    choice = d.select(prompt, [o[0] for o in _DATE_MODE_OPTIONS], preselect=preselect)
+    if choice < 0:
+        return current_mode, current_static, current_n  # cancelled — keep as-is
+
+    mode = _DATE_MODE_KEYS[choice]
+    static_date = current_static
+    n = current_n
+
+    if mode == "static":
+        val = d.input("Date (YYYY-MM-DD)", defaultt=current_static or "", type=xbmcgui.INPUT_ALPHANUM)
+        static_date = val.strip() if val else ""
+    elif mode in ("last_months", "last_years"):
+        unit = "months" if mode == "last_months" else "years"
+        val = d.input("Number of {}".format(unit), defaultt=str(current_n or 12), type=xbmcgui.INPUT_NUMERIC)
+        try:
+            n = int(val) if val and int(val) > 0 else (current_n or 12)
+        except ValueError:
+            n = current_n or 12
+
+    return mode, static_date, n
+
+
+def _date_filter_label(mode, static_date, n):
+    """Human-readable summary of a date filter for menu display."""
+    if mode == "static":
+        return static_date or "(any)"
+    if mode == "last_months":
+        return "Last {} month{}".format(n, "s" if n != 1 else "")
+    if mode == "last_years":
+        return "Last {} year{}".format(n, "s" if n != 1 else "")
+    return "(any)"
+
 
 def _get_api_key():
     return ADDON.getSetting("tmdb_api_key").strip()
@@ -403,25 +451,19 @@ def _show_add_mdblist():
     )
     genres_include = [MDBLIST_GENRES[i] for i in (inc_result or [])]
 
+    _anime_idx = MDBLIST_GENRES.index("Anime") if "Anime" in MDBLIST_GENRES else -1
     exc_result = d.multiselect(
         "Genres to exclude (API only — exclude wins on conflict)",
         MDBLIST_GENRES,
-        preselect=[],
+        preselect=[_anime_idx] if _anime_idx >= 0 else [],
     )
     genres_exclude = [MDBLIST_GENRES[i] for i in (exc_result or [])]
 
     # Client-side priority: exclude wins
     genres_include = [g for g in genres_include if g not in genres_exclude]
 
-    released_from = d.input(
-        "Released from (API only — YYYY-MM-DD, blank for any)",
-        defaultt="", type=xbmcgui.INPUT_ALPHANUM,
-    ).strip()
-
-    released_to = d.input(
-        "Released to (API only — YYYY-MM-DD, blank for any)",
-        defaultt="", type=xbmcgui.INPUT_ALPHANUM,
-    ).strip()
+    rf_mode, rf_static, rf_n = _ask_date_filter(d, "Released from (API only)", "", "", 12)
+    rt_mode, rt_static, rt_n = _ask_date_filter(d, "Released to (API only)", "", "", 12)
 
     append_keys = [o[1] for o in MDBLIST_APPEND_OPTIONS]
     preselect_ratings = [i for i, o in enumerate(MDBLIST_APPEND_OPTIONS) if o[1] == "ratings"]
@@ -443,8 +485,12 @@ def _show_add_mdblist():
         "mediatype": mediatype,
         "genres_include": genres_include,
         "genres_exclude": genres_exclude,
-        "released_from": released_from,
-        "released_to": released_to,
+        "released_from": rf_static,
+        "released_from_mode": rf_mode,
+        "released_from_n": rf_n,
+        "released_to": rt_static,
+        "released_to_mode": rt_mode,
+        "released_to_n": rt_n,
         "append_to_response": append_to_response,
     }
 
@@ -574,6 +620,12 @@ def show_edit_mdblist(entry):
     if raw_exc is None:
         raw_exc = []
 
+    # Backward-compat: infer mode for entries saved before dynamic dates existed
+    raw_rf = raw_filters.get("released_from", "")
+    raw_rt = raw_filters.get("released_to", "")
+    raw_rf_mode = raw_filters.get("released_from_mode", "static" if raw_rf else "")
+    raw_rt_mode = raw_filters.get("released_to_mode", "static" if raw_rt else "")
+
     working = {
         "label": entry["label"],
         "mdblist_url": entry.get("mdblist_url", ""),
@@ -585,8 +637,12 @@ def show_edit_mdblist(entry):
             "mediatype": raw_filters.get("mediatype", ""),
             "genres_include": list(raw_inc),
             "genres_exclude": list(raw_exc),
-            "released_from": raw_filters.get("released_from", ""),
-            "released_to": raw_filters.get("released_to", ""),
+            "released_from": raw_rf,
+            "released_from_mode": raw_rf_mode,
+            "released_from_n": raw_filters.get("released_from_n", 12),
+            "released_to": raw_rt,
+            "released_to_mode": raw_rt_mode,
+            "released_to_n": raw_filters.get("released_to_n", 12),
             "append_to_response": raw_append,
         },
     }
@@ -604,6 +660,9 @@ def show_edit_mdblist(entry):
         exc_label   = ", ".join(f["genres_exclude"]) if f["genres_exclude"] else "(none)"
         append_label = f["append_to_response"] or "(none)"
 
+        rf_label = _date_filter_label(f["released_from_mode"], f["released_from"], f["released_from_n"])
+        rt_label = _date_filter_label(f["released_to_mode"], f["released_to"], f["released_to_n"])
+
         menu_items = [
             "Name:                  {}".format(working["label"]),
             "MDBList URL:           {}".format(working["mdblist_url"] or "(not set)"),
@@ -613,8 +672,8 @@ def show_edit_mdblist(entry):
             "Media type (API):      {}".format(mt_label),
             "Genres include (API):  {}".format(inc_label),
             "Genres exclude (API):  {}".format(exc_label),
-            "Released from (API):   {}".format(f["released_from"] or "(any)"),
-            "Released to (API):     {}".format(f["released_to"] or "(any)"),
+            "Released from (API):   {}".format(rf_label),
+            "Released to (API):     {}".format(rt_label),
             "Append (API):          {}".format(append_label),
             "Update interval:       {} days".format(working["update_interval"]),
             "[COLOR green]Save[/COLOR]",
@@ -709,14 +768,22 @@ def show_edit_mdblist(entry):
                 working["filters"]["genres_exclude"] = [MDBLIST_GENRES[i] for i in result]
 
         elif choice == 8:
-            val = d.input("Released from (YYYY-MM-DD, blank for any)",
-                          defaultt=f["released_from"], type=xbmcgui.INPUT_ALPHANUM)
-            working["filters"]["released_from"] = val.strip() if val else ""
+            mode, static, n = _ask_date_filter(
+                d, "Released from (API only)",
+                f["released_from_mode"], f["released_from"], f["released_from_n"],
+            )
+            working["filters"]["released_from_mode"] = mode
+            working["filters"]["released_from"] = static
+            working["filters"]["released_from_n"] = n
 
         elif choice == 9:
-            val = d.input("Released to (YYYY-MM-DD, blank for any)",
-                          defaultt=f["released_to"], type=xbmcgui.INPUT_ALPHANUM)
-            working["filters"]["released_to"] = val.strip() if val else ""
+            mode, static, n = _ask_date_filter(
+                d, "Released to (API only)",
+                f["released_to_mode"], f["released_to"], f["released_to_n"],
+            )
+            working["filters"]["released_to_mode"] = mode
+            working["filters"]["released_to"] = static
+            working["filters"]["released_to_n"] = n
 
         elif choice == 10:
             cur_append = f["append_to_response"]
@@ -735,9 +802,10 @@ def show_edit_mdblist(entry):
         elif choice == 11:
             keys = [o[1] for o in INTERVAL_OPTIONS]
             cur_idx = keys.index(working["update_interval"]) if working["update_interval"] in keys else 3
-            c = d.select("Update interval", [o[0] for o in INTERVAL_OPTIONS], preselect=cur_idx)
-            if c >= 0:
-                working["update_interval"] = keys[c]
+            interval_labels = ["OK (keep current)"] + [o[0] for o in INTERVAL_OPTIONS]
+            c = d.select("Update interval", interval_labels, preselect=cur_idx + 1)
+            if c > 0:
+                working["update_interval"] = keys[c - 1]
 
     return changed
 
@@ -975,9 +1043,10 @@ def show_edit_list(entry):
             keys = [o[1] for o in INTERVAL_OPTIONS]
             cur = working["update_interval"]
             cur_idx = keys.index(cur) if cur in keys else 3
-            c = d.select("Update interval", [o[0] for o in INTERVAL_OPTIONS], preselect=cur_idx)
-            if c >= 0:
-                working["update_interval"] = keys[c]
+            interval_labels = ["OK (keep current)"] + [o[0] for o in INTERVAL_OPTIONS]
+            c = d.select("Update interval", interval_labels, preselect=cur_idx + 1)
+            if c > 0:
+                working["update_interval"] = keys[c - 1]
 
     return changed
 

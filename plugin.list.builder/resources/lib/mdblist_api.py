@@ -5,9 +5,44 @@ JSON export:  https://mdblist.com/lists/user/listname/json/
 REST API:     https://mdblist.com/api/lists/user/listname/items/?apikey=…
 """
 
+import calendar
+from datetime import date
+
+try:
+    from urllib.parse import urlencode
+except ImportError:
+    from urllib import urlencode
+
 import requests
 
 from resources.lib.logger import logger
+
+
+def _resolve_dynamic_date(mode, n, static_date=""):
+    """
+    Resolve a date filter value to a concrete YYYY-MM-DD string.
+
+    mode:
+      ""           -> no filter (returns "")
+      "static"     -> return static_date as-is
+      "last_months"-> today minus n months
+      "last_years" -> today minus n years (= n*12 months)
+
+    Called at fetch time so the date is always current when lists auto-update.
+    """
+    if mode == "static":
+        return static_date or ""
+    if mode in ("last_months", "last_years"):
+        today = date.today()
+        total_months = (n * 12) if mode == "last_years" else int(n)
+        year = today.year
+        month = today.month - total_months
+        while month <= 0:
+            month += 12
+            year -= 1
+        day = min(today.day, calendar.monthrange(year, month)[1])
+        return "{:04d}-{:02d}-{:02d}".format(year, month, day)
+    return ""
 
 # Genre names as accepted by the MDBList API genre filter.
 # Source: https://mdblist.com/shows/ and https://mdblist.com/movies/
@@ -15,6 +50,7 @@ MDBLIST_GENRES = [
     "Action",
     "Adventure",
     "Animation",
+    "Anime",
     "Comedy",
     "Crime",
     "Documentary",
@@ -41,11 +77,29 @@ MDBLIST_GENRES = [
 MDBLIST_SORT_OPTIONS = [
     ("List rank", "rank"),
     ("MDB score", "score"),
-    ("Title", "title"),
-    ("IMDb rating", "imdbrating"),
-    ("MDB rating", "mdbrating"),
+    ("User sort", "usort"),
+    ("Score average", "score_average"),
     ("Release date", "released"),
+    ("Digital release date", "releasedigital"),
+    ("IMDb rating", "imdbrating"),
+    ("IMDb votes", "imdbvotes"),
+    ("Last air date", "last_air_date"),
+    ("IMDb popularity", "imdbpopular"),
+    ("TMDb popularity", "tmdbpopular"),
+    ("Roger Ebert", "rogerebert"),
+    ("Rotten Tomatoes", "rtomatoes"),
+    ("RT audience score", "rtaudience"),
+    ("Metacritic", "metacritic"),
+    ("MyAnimeList", "myanimelist"),
+    ("Letterboxd rating", "letterrating"),
+    ("Letterboxd votes", "lettervotes"),
+    ("Budget", "budget"),
+    ("Revenue", "revenue"),
+    ("Runtime", "runtime"),
+    ("Title", "title"),
+    ("Sort title", "sort_title"),
     ("Date added", "added"),
+    ("Random", "random"),
 ]
 
 # mediatype values for the API filter
@@ -249,11 +303,19 @@ def get_mdblist_items_api(url, api_key, total_items=50, filters=None):
         params["filter_genre"] = ",".join(genres_include)
         params["genre_operator"] = "or"
 
-    released_from = filters.get("released_from", "")
+    # Resolve released_from: dynamic mode takes priority; fall back to static for old entries
+    rf_mode = filters.get("released_from_mode",
+                          "static" if filters.get("released_from") else "")
+    rf_n = filters.get("released_from_n", 12)
+    released_from = _resolve_dynamic_date(rf_mode, rf_n, filters.get("released_from", ""))
     if released_from:
         params["released_from"] = released_from
 
-    released_to = filters.get("released_to", "")
+    # Resolve released_to
+    rt_mode = filters.get("released_to_mode",
+                          "static" if filters.get("released_to") else "")
+    rt_n = filters.get("released_to_n", 12)
+    released_to = _resolve_dynamic_date(rt_mode, rt_n, filters.get("released_to", ""))
     if released_to:
         params["released_to"] = released_to
 
@@ -269,10 +331,12 @@ def get_mdblist_items_api(url, api_key, total_items=50, filters=None):
     if append:
         params["append_to_response"] = append
 
+    safe_params = {k: v for k, v in params.items() if k != "apikey"}
     logger.info(
-        "mdblist_api: API fetch {} params={}".format(
-            api_url, {k: v for k, v in params.items() if k != "apikey"}
-        )
+        "mdblist_api: API fetch {} params={}".format(api_url, safe_params)
+    )
+    logger.debug(
+        "mdblist_api: full URL (key omitted): {}?{}".format(api_url, urlencode(safe_params))
     )
 
     try:

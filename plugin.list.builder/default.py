@@ -92,8 +92,16 @@ def _plugin_tmdb_items(handle, list_id):
         tmdb_type = tmdb_type_map.get(mediatype, "tv")
         kodi_type = kodi_type_map.get(mediatype, "tvshow")
 
-        url = "plugin://plugin.video.tmdb.bingie.helper/?info=details&tmdb_type={}&tmdb_id={}".format(
-            tmdb_type, tmdb_id
+        # TV shows: use info=seasons so "More Episodes" in the Bingie info dialog
+        # goes directly to the seasons list rather than the 12-entry detail submenu.
+        # Movies: info=details is correct (opens the movie detail/play menu).
+        if tmdb_type == "tv":
+            info_param = "seasons"
+        else:
+            info_param = "details"
+
+        url = "plugin://plugin.video.tmdb.bingie.helper/?info={}&tmdb_type={}&tmdb_id={}".format(
+            info_param, tmdb_type, tmdb_id
         )
 
         li = xbmcgui.ListItem(label=title)
@@ -101,6 +109,13 @@ def _plugin_tmdb_items(handle, list_id):
         if release_year:
             info["year"] = release_year
         li.setInfo("video", info)
+
+        if tmdb_id:
+            unique_ids = {"tmdb": str(tmdb_id)}
+            imdb_id = item.get("imdb_id")
+            if imdb_id:
+                unique_ids["imdb"] = str(imdb_id)
+            li.setUniqueIDs(unique_ids)
 
         if poster_path:
             li.setArt({"poster": "https://image.tmdb.org/t/p/w500{}".format(poster_path)})

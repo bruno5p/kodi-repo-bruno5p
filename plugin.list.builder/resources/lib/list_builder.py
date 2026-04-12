@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import xbmcvfs
 
 from resources.lib.logger import logger
-from resources.lib.tmdb_api import get_discover_items
+from resources.lib.tmdb_api import get_discover_items, enrich_poster_paths, resolve_api_key
 
 ADDON_ID = "plugin.list.builder"
 
@@ -112,6 +112,14 @@ def build_mdblist_list(entry):
 
     if not items:
         logger.warning("list_builder: got 0 items for mdblist id={}".format(list_id))
+
+    # Enrich items with TMDb poster_path (MDBList API never returns poster paths)
+    configured_tmdb_key = xbmcaddon.Addon().getSetting("tmdb_api_key").strip()
+    tmdb_api_key, _ = resolve_api_key(configured_tmdb_key)
+    if tmdb_api_key and items:
+        items = enrich_poster_paths(items, tmdb_api_key)
+    else:
+        logger.warning("list_builder: no TMDb API key — poster_path will be empty for mdblist id={}".format(list_id))
 
     output_path = xbmcvfs.translatePath(
         "special://profile/addon_data/{}/lists/items_list_{}.json".format(ADDON_ID, list_id)
