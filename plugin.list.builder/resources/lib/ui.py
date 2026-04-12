@@ -14,6 +14,10 @@ from resources.lib.genres import (
     SORT_OPTIONS, LANGUAGE_OPTIONS, COUNTRY_OPTIONS,
     INTERVAL_OPTIONS, MEDIATYPE_OPTIONS,
 )
+from resources.lib.mdblist_api import (
+    MDBLIST_SORT_OPTIONS, MDBLIST_MEDIATYPE_OPTIONS,
+    MDBLIST_GENRES, MDBLIST_APPEND_OPTIONS,
+)
 from resources.lib.smartplaylist_reader import SAMPLER_SORT_OPTIONS
 
 ADDON = xbmcaddon.Addon()
@@ -137,6 +141,15 @@ def _run_update(entry):
                 xbmcgui.NOTIFICATION_ERROR, 4000,
             )
             return
+    elif entry_type == "mdblist":
+        mdb_key = ADDON.getSetting("mdblist_api_key").strip()
+        if not mdb_key:
+            xbmcgui.Dialog().notification(
+                _ADDON_NAME, "No MDBList API key configured!",
+                xbmcgui.NOTIFICATION_ERROR, 4000,
+            )
+            return
+        api_key = None
     else:
         api_key = None
 
@@ -361,17 +374,90 @@ def _show_add_mdblist():
     except ValueError:
         total_items = 50
 
+    # --- API filters (ignored when no MDBList API key is configured) ---
+
+    sort_labels = ["(default / no sort)"] + [o[0] for o in MDBLIST_SORT_OPTIONS]
+    sort_keys   = [""]                    + [o[1] for o in MDBLIST_SORT_OPTIONS]
+    sort_choice = d.select("Sort by (API only)", sort_labels)
+    if sort_choice < 0:
+        sort_choice = 0  # treat cancel as "no sort"
+    sort = sort_keys[sort_choice]
+
+    order = ""
+    if sort:
+        order_choice = d.select("Sort order (API only)", ["Ascending", "Descending"])
+        if order_choice < 0:
+            order_choice = 0
+        order = "desc" if order_choice == 1 else "asc"
+
+    mt_choice = d.select(
+        "Media type filter (API only)",
+        [o[0] for o in MDBLIST_MEDIATYPE_OPTIONS],
+    )
+    mediatype = "" if mt_choice < 0 else MDBLIST_MEDIATYPE_OPTIONS[mt_choice][1]
+
+    inc_result = d.multiselect(
+        "Genres to include (API only — none selected = any)",
+        MDBLIST_GENRES,
+        preselect=[],
+    )
+    genres_include = [MDBLIST_GENRES[i] for i in (inc_result or [])]
+
+    exc_result = d.multiselect(
+        "Genres to exclude (API only — exclude wins on conflict)",
+        MDBLIST_GENRES,
+        preselect=[],
+    )
+    genres_exclude = [MDBLIST_GENRES[i] for i in (exc_result or [])]
+
+    # Client-side priority: exclude wins
+    genres_include = [g for g in genres_include if g not in genres_exclude]
+
+    released_from = d.input(
+        "Released from (API only — YYYY-MM-DD, blank for any)",
+        defaultt="", type=xbmcgui.INPUT_ALPHANUM,
+    ).strip()
+
+    released_to = d.input(
+        "Released to (API only — YYYY-MM-DD, blank for any)",
+        defaultt="", type=xbmcgui.INPUT_ALPHANUM,
+    ).strip()
+
+    append_keys = [o[1] for o in MDBLIST_APPEND_OPTIONS]
+    preselect_ratings = [i for i, o in enumerate(MDBLIST_APPEND_OPTIONS) if o[1] == "ratings"]
+    append_result = d.multiselect(
+        "Append to response (API only)",
+        [o[0] for o in MDBLIST_APPEND_OPTIONS],
+        preselect=preselect_ratings,
+    )
+    append_to_response = ",".join(append_keys[i] for i in (append_result or []))
+
     interval_choice = d.select("Update interval", [o[0] for o in INTERVAL_OPTIONS], preselect=3)
     if interval_choice < 0:
         return None
     update_interval = INTERVAL_OPTIONS[interval_choice][1]
+
+    mdblist_filters = {
+        "sort": sort,
+        "order": order,
+        "mediatype": mediatype,
+        "genres_include": genres_include,
+        "genres_exclude": genres_exclude,
+        "released_from": released_from,
+        "released_to": released_to,
+        "append_to_response": append_to_response,
+    }
 
     return list_manager.add_list(
         label=label,
         description="",
         list_type="mdblist",
         update_interval=update_interval,
-        mdblist_config={"mdblist_url": url, "total_items": total_items},
+        mdblist_config={
+            "mdblist_url": url,
+            "total_items": total_items,
+            "mdblist_filters": mdblist_filters,
+        },
     )
 
 
@@ -455,39 +541,103 @@ def show_edit_mdblist(entry):
     """
     Menu-based edit dialog for MDBList entries.
     Returns True if changes were saved.
+
+    Menu indices:
+      0  Name
+      1  MDBList URL
+      2  Max items
+      3  Sort by (API)
+      4  Order (API)
+      5  Media type (API)
+      6  Genres include (API)
+      7  Genres exclude (API)
+      8  Released from (API)
+      9  Released to (API)
+      10 Append (API)
+      11 Update interval
+      12 Save
+      13 Cancel
     """
+    raw_filters = entry.get("mdblist_filters") or {}
+
+    # Normalise append_to_response — stored as comma-string
+    raw_append = raw_filters.get("append_to_response", "ratings")
+    if isinstance(raw_append, list):
+        raw_append = ",".join(raw_append)
+
+    # Normalise genres — may be stored as list or missing (old entries had "genre" string)
+    raw_inc = raw_filters.get("genres_include")
+    raw_exc = raw_filters.get("genres_exclude")
+    if raw_inc is None:
+        old = raw_filters.get("genre", "")
+        raw_inc = [old] if old else []
+    if raw_exc is None:
+        raw_exc = []
+
     working = {
         "label": entry["label"],
         "mdblist_url": entry.get("mdblist_url", ""),
         "total_items": entry.get("total_items", 50),
         "update_interval": entry.get("update_interval", 1),
+        "filters": {
+            "sort": raw_filters.get("sort", ""),
+            "order": raw_filters.get("order", ""),
+            "mediatype": raw_filters.get("mediatype", ""),
+            "genres_include": list(raw_inc),
+            "genres_exclude": list(raw_exc),
+            "released_from": raw_filters.get("released_from", ""),
+            "released_to": raw_filters.get("released_to", ""),
+            "append_to_response": raw_append,
+        },
     }
 
     changed = False
+    _SORT_KEYS   = [""] + [o[1] for o in MDBLIST_SORT_OPTIONS]
+    _SORT_LABELS = ["(default / no sort)"] + [o[0] for o in MDBLIST_SORT_OPTIONS]
+    _APPEND_KEYS = [o[1] for o in MDBLIST_APPEND_OPTIONS]
 
     while True:
+        f = working["filters"]
+        sort_label  = next((o[0] for o in MDBLIST_SORT_OPTIONS if o[1] == f["sort"]), "(default)")
+        mt_label    = next((o[0] for o in MDBLIST_MEDIATYPE_OPTIONS if o[1] == f["mediatype"]), "All types")
+        inc_label   = ", ".join(f["genres_include"]) if f["genres_include"] else "(any)"
+        exc_label   = ", ".join(f["genres_exclude"]) if f["genres_exclude"] else "(none)"
+        append_label = f["append_to_response"] or "(none)"
+
         menu_items = [
-            "Name:             {}".format(working["label"]),
-            "MDBList URL:      {}".format(working["mdblist_url"] or "(not set)"),
-            "Max items:        {}".format(working["total_items"]),
-            "Update interval:  {} days".format(working["update_interval"]),
+            "Name:                  {}".format(working["label"]),
+            "MDBList URL:           {}".format(working["mdblist_url"] or "(not set)"),
+            "Max items:             {}".format(working["total_items"]),
+            "Sort by (API):         {}".format(sort_label),
+            "Order (API):           {}".format(f["order"] or "(default)"),
+            "Media type (API):      {}".format(mt_label),
+            "Genres include (API):  {}".format(inc_label),
+            "Genres exclude (API):  {}".format(exc_label),
+            "Released from (API):   {}".format(f["released_from"] or "(any)"),
+            "Released to (API):     {}".format(f["released_to"] or "(any)"),
+            "Append (API):          {}".format(append_label),
+            "Update interval:       {} days".format(working["update_interval"]),
             "[COLOR green]Save[/COLOR]",
             "[COLOR red]Cancel[/COLOR]",
         ]
 
-        choice = xbmcgui.Dialog().select("Edit: {}".format(working["label"]), menu_items)
-
-        SAVE_IDX = len(menu_items) - 2
+        SAVE_IDX   = len(menu_items) - 2
         CANCEL_IDX = len(menu_items) - 1
+
+        choice = xbmcgui.Dialog().select("Edit: {}".format(working["label"]), menu_items)
 
         if choice < 0 or choice == CANCEL_IDX:
             break
 
         if choice == SAVE_IDX:
+            # Client-side priority before saving
+            fi = working["filters"]
+            fi["genres_include"] = [g for g in fi["genres_include"] if g not in fi["genres_exclude"]]
             list_manager.update_list(entry["id"], {
                 "label": working["label"],
                 "mdblist_url": working["mdblist_url"],
                 "total_items": working["total_items"],
+                "mdblist_filters": working["filters"],
                 "update_interval": working["update_interval"],
             })
             changed = True
@@ -520,9 +670,71 @@ def show_edit_mdblist(entry):
                 pass
 
         elif choice == 3:
+            cur_idx = _SORT_KEYS.index(f["sort"]) if f["sort"] in _SORT_KEYS else 0
+            c = d.select("Sort by (API only)", _SORT_LABELS, preselect=cur_idx)
+            if c >= 0:
+                working["filters"]["sort"] = _SORT_KEYS[c]
+
+        elif choice == 4:
+            order_opts = [("(default)", ""), ("Ascending", "asc"), ("Descending", "desc")]
+            cur_idx = next((i for i, o in enumerate(order_opts) if o[1] == f["order"]), 0)
+            c = d.select("Sort order (API only)", [o[0] for o in order_opts], preselect=cur_idx)
+            if c >= 0:
+                working["filters"]["order"] = order_opts[c][1]
+
+        elif choice == 5:
+            mt_keys = [o[1] for o in MDBLIST_MEDIATYPE_OPTIONS]
+            cur_idx = mt_keys.index(f["mediatype"]) if f["mediatype"] in mt_keys else 0
+            c = d.select("Media type filter (API only)",
+                         [o[0] for o in MDBLIST_MEDIATYPE_OPTIONS], preselect=cur_idx)
+            if c >= 0:
+                working["filters"]["mediatype"] = mt_keys[c]
+
+        elif choice == 6:
+            preselect = [i for i, g in enumerate(MDBLIST_GENRES) if g in f["genres_include"]]
+            result = d.multiselect(
+                "Genres to include (none selected = any)",
+                MDBLIST_GENRES, preselect=preselect,
+            )
+            if result is not None:
+                working["filters"]["genres_include"] = [MDBLIST_GENRES[i] for i in result]
+
+        elif choice == 7:
+            preselect = [i for i, g in enumerate(MDBLIST_GENRES) if g in f["genres_exclude"]]
+            result = d.multiselect(
+                "Genres to exclude (exclude wins on conflict)",
+                MDBLIST_GENRES, preselect=preselect,
+            )
+            if result is not None:
+                working["filters"]["genres_exclude"] = [MDBLIST_GENRES[i] for i in result]
+
+        elif choice == 8:
+            val = d.input("Released from (YYYY-MM-DD, blank for any)",
+                          defaultt=f["released_from"], type=xbmcgui.INPUT_ALPHANUM)
+            working["filters"]["released_from"] = val.strip() if val else ""
+
+        elif choice == 9:
+            val = d.input("Released to (YYYY-MM-DD, blank for any)",
+                          defaultt=f["released_to"], type=xbmcgui.INPUT_ALPHANUM)
+            working["filters"]["released_to"] = val.strip() if val else ""
+
+        elif choice == 10:
+            cur_append = f["append_to_response"]
+            cur_list = [v.strip() for v in cur_append.split(",") if v.strip()]
+            preselect = [i for i, k in enumerate(_APPEND_KEYS) if k in cur_list]
+            result = d.multiselect(
+                "Append to response (API only)",
+                [o[0] for o in MDBLIST_APPEND_OPTIONS],
+                preselect=preselect,
+            )
+            if result is not None:
+                working["filters"]["append_to_response"] = ",".join(
+                    _APPEND_KEYS[i] for i in result
+                )
+
+        elif choice == 11:
             keys = [o[1] for o in INTERVAL_OPTIONS]
-            cur = working["update_interval"]
-            cur_idx = keys.index(cur) if cur in keys else 3
+            cur_idx = keys.index(working["update_interval"]) if working["update_interval"] in keys else 3
             c = d.select("Update interval", [o[0] for o in INTERVAL_OPTIONS], preselect=cur_idx)
             if c >= 0:
                 working["update_interval"] = keys[c]

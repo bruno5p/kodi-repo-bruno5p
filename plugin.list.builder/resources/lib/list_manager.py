@@ -47,6 +47,16 @@ MDBList list:
     "description": "",
     "mdblist_url": "https://mdblist.com/lists/user/top-anime",
     "total_items": 50,
+    "mdblist_filters": {                    # applied only when API key is configured
+        "sort": "rank",                     # rank | score | title | imdbrating | mdbrating | released | added
+        "order": "asc",                     # asc | desc
+        "mediatype": "",                    # "" (all) | "movie" | "show"
+        "genres_include": [],               # list of genre name strings; [] = any
+        "genres_exclude": [],               # list of genre name strings; [] = none; exclude wins on conflict
+        "released_from": "",                # "YYYY-MM-DD" or ""
+        "released_to": "",                  # "YYYY-MM-DD" or ""
+        "append_to_response": "ratings"     # comma-separated: ratings, reviews, keywords
+    },
     "update_interval": 1,         # days between fetches
     "last_updated": null          # ISO date string or null
 }
@@ -154,6 +164,12 @@ def add_list(label, description, list_type="tmdb", mediatype=None, update_interv
             "description": description,
             "mdblist_url": mdblist_config["mdblist_url"],
             "total_items": mdblist_config.get("total_items", 50),
+            "mdblist_filters": mdblist_config.get("mdblist_filters", {
+                "sort": "", "order": "", "mediatype": "",
+                "genres_include": [], "genres_exclude": [],
+                "released_from": "", "released_to": "",
+                "append_to_response": "ratings",
+            }),
             "update_interval": update_interval,
             "last_updated": None,
         }

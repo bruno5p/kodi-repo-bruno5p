@@ -80,24 +80,35 @@ def build_discover_params(entry):
 
 def build_mdblist_list(entry):
     """
-    Fetch items from a MDBList URL and write items_list_{id}.json.
+    Fetch items from a MDBList URL via the REST API and write items_list_{id}.json.
+    An MDBList API key must be configured in addon settings.
 
     Args:
-        entry: list config dict with keys: id, label, mdblist_url, total_items
+        entry: list config dict with keys:
+               id, label, mdblist_url, total_items,
+               mdblist_filters (optional dict)
 
     Returns:
-        True on success, False on failure.
+        True on success, False on failure (including missing API key).
     """
-    from resources.lib.mdblist_api import get_mdblist_items
+    from resources.lib.mdblist_api import get_mdblist_items_api
 
     list_id = entry["id"]
     label = entry.get("label", str(list_id))
     url = entry.get("mdblist_url", "")
     total_items = entry.get("total_items", 50)
+    filters = entry.get("mdblist_filters", {})
 
     logger.info("list_builder: building mdblist '{}' id={}".format(label, list_id))
 
-    items = get_mdblist_items(url, total_items)
+    import xbmcaddon
+    api_key = xbmcaddon.Addon().getSetting("mdblist_api_key").strip()
+
+    if not api_key:
+        logger.error("list_builder: MDBList API key not configured — cannot fetch id={}".format(list_id))
+        return False
+
+    items = get_mdblist_items_api(url, api_key, total_items=total_items, filters=filters)
 
     if not items:
         logger.warning("list_builder: got 0 items for mdblist id={}".format(list_id))
