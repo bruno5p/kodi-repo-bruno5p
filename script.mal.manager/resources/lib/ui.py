@@ -10,7 +10,7 @@ from resources.lib import auth, mal_api
 
 ADDON = xbmcaddon.Addon()
 
-ACTIONS = ["Mark as Watching", "Mark as Completed", "Update Score", "Change Status", "Add to Plan to Watch"]
+ACTIONS = ["Mark as Watching", "Update Episodes Watched", "Mark as Completed", "Update Score", "Change Status", "Add to Plan to Watch"]
 
 
 def show_manager(mal_id):
@@ -58,12 +58,14 @@ def show_manager(mal_id):
     if choice == 0:
         _set_status(mal_id, mal_api.STATUS_WATCHING)
     elif choice == 1:
-        _set_status(mal_id, mal_api.STATUS_COMPLETED)
+        _update_episodes(mal_id, current_watched)
     elif choice == 2:
-        _update_score(mal_id, current_score)
+        _set_status(mal_id, mal_api.STATUS_COMPLETED)
     elif choice == 3:
-        _change_status(mal_id, current_status)
+        _update_score(mal_id, current_score)
     elif choice == 4:
+        _change_status(mal_id, current_status)
+    elif choice == 5:
         _set_status(mal_id, mal_api.STATUS_PLAN_TO_WATCH)
     # choice == -1: cancelled
 
@@ -76,6 +78,30 @@ def _set_status(mal_id, status):
         xbmcgui.Dialog().notification("MAL Manager", "Status updated: {}".format(label), xbmcgui.NOTIFICATION_INFO, 3000)
     else:
         xbmcgui.Dialog().notification("MAL Manager", "Failed to update status", xbmcgui.NOTIFICATION_ERROR, 3000)
+
+
+def _update_episodes(mal_id, current_watched):
+    ep_str = xbmcgui.Dialog().input(
+        "Episodes watched",
+        str(current_watched) if current_watched else "0",
+        type=xbmcgui.INPUT_NUMERIC
+    )
+    if ep_str is None or ep_str == "":
+        return
+    try:
+        num_watched = int(ep_str)
+        if num_watched < 0:
+            raise ValueError("negative")
+    except ValueError:
+        xbmcgui.Dialog().notification("MAL Manager", "Invalid number of episodes", xbmcgui.NOTIFICATION_WARNING, 3000)
+        return
+
+    result = mal_api.update_anime_status(mal_id, num_watched=num_watched)
+    if result:
+        logger.info("ui: episodes watched set to {} for mal_id={}".format(num_watched, mal_id))
+        xbmcgui.Dialog().notification("MAL Manager", "Episodes watched: {}".format(num_watched), xbmcgui.NOTIFICATION_INFO, 3000)
+    else:
+        xbmcgui.Dialog().notification("MAL Manager", "Failed to update episodes", xbmcgui.NOTIFICATION_ERROR, 3000)
 
 
 def _update_score(mal_id, current_score):
