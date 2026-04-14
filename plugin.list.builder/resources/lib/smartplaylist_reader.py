@@ -147,7 +147,7 @@ def get_playlist_items(playlist_path, sample_size, sort_by, sort_direction):
         method = "VideoLibrary.GetTVShows"
         result_key = "tvshows"
         item_type = "tvshow"
-        properties = ["title", "year", "art", "rating", "dateadded"]
+        properties = ["title", "year", "art", "rating", "dateadded", "uniqueid"]
     else:
         logger.warning("smartplaylist_reader: unsupported playlist type '{}'".format(media_type))
         return []
@@ -183,6 +183,7 @@ def get_playlist_items(playlist_path, sample_size, sort_by, sort_direction):
             "rating":    e.get("rating") or None,
             "dateadded": e.get("dateadded") or None,
             "is_folder": is_folder,
+            "uniqueid":  e.get("uniqueid") or {},
         })
 
     # Sort in Python

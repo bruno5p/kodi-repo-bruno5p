@@ -156,6 +156,10 @@ def _plugin_otaku_combined_items(handle, entry):
         if art:
             li.setArt(art)
 
+        mal_id = item.get("mal_id")
+        if mal_id:
+            li.setUniqueIDs({"mal": str(mal_id)})
+
         xbmcplugin.addDirectoryItem(handle, file_url, li, isFolder=True)
 
     xbmcplugin.endOfDirectory(handle, succeeded=True)
@@ -196,6 +200,10 @@ def _plugin_smartplaylist_items(handle, entry):
         art = item.get("art", {})
         if art:
             li.setArt(art)
+
+        uniqueid = item.get("uniqueid") or {}
+        if uniqueid:
+            li.setUniqueIDs(uniqueid)
 
         xbmcplugin.addDirectoryItem(handle, file_url, li, isFolder=item.get("is_folder", False))
 
