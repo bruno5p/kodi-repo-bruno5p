@@ -61,11 +61,11 @@ MDBList list:
     "last_updated": null          # ISO date string or null
 }
 
-Otaku Combined Watching:
+Local + Otaku Recently Watched:
 {
     "id": 20261030105754,
-    "type": "otaku_combined",
-    "label": "Currently Watching",
+    "type": "local_otaku_recent",
+    "label": "Recently Watched",
     "description": ""
 }
 
@@ -147,14 +147,12 @@ def add_list(label, description, list_type="tmdb", mediatype=None, update_interv
             "sort_by": playlist_config["sort_by"],
             "sort_direction": playlist_config["sort_direction"],
         }
-    elif list_type == "otaku_combined":
-        default_sources = {"local": True, "otaku_watching": True, "mal_watching": True}
+    elif list_type == "local_otaku_recent":
         entry = {
             "id": list_id,
-            "type": "otaku_combined",
+            "type": "local_otaku_recent",
             "label": label,
             "description": description,
-            "sources": (otaku_config or {}).get("sources", default_sources),
         }
     elif list_type == "mdblist":
         entry = {
@@ -246,7 +244,7 @@ def needs_update(entry):
     Smartplaylist entries are always dynamic — never need a cache update.
     For tmdb entries: True when last_updated is None or age >= update_interval days.
     """
-    if entry.get("type") in ("smartplaylist", "otaku_combined"):
+    if entry.get("type") in ("smartplaylist", "local_otaku_recent"):
         return False
     last_updated = entry.get("last_updated")
     if last_updated is None:
@@ -271,7 +269,7 @@ def get_widget_url(entry):
     plugin; cached types (tmdb, mdblist) are routed through Bingie's
     mdblist_locallist handler.
     """
-    if entry.get("type") in ("smartplaylist", "otaku_combined"):
+    if entry.get("type") in ("smartplaylist", "local_otaku_recent"):
         return "plugin://plugin.list.builder/?list_id={}".format(entry["id"])
     path = get_items_path(entry["id"])
     return "plugin://plugin.video.tmdb.bingie.helper/?info=mdblist_locallist&&{}".format(path)

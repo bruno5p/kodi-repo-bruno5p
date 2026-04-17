@@ -54,8 +54,8 @@ def _plugin_list_items(handle, list_id):
 
     if entry and entry.get("type") == "smartplaylist":
         _plugin_smartplaylist_items(handle, entry)
-    elif entry and entry.get("type") == "otaku_combined":
-        _plugin_otaku_combined_items(handle, entry)
+    elif entry and entry.get("type") == "local_otaku_recent":
+        _plugin_local_otaku_recent_items(handle, entry)
     else:
         _plugin_tmdb_items(handle, list_id)
 
@@ -125,15 +125,15 @@ def _plugin_tmdb_items(handle, list_id):
     xbmcplugin.endOfDirectory(handle, succeeded=True)
 
 
-def _plugin_otaku_combined_items(handle, entry):
-    """Serve a live combined watching list from local library + Otaku plugin sources."""
+def _plugin_local_otaku_recent_items(handle, entry):
+    """Serve a live recently-watched list from local library + Otaku watch history."""
     import xbmcgui
     import xbmcplugin
-    from resources.lib import otaku_combined
+    from resources.lib import local_otaku_recent
 
     xbmcplugin.setContent(handle, "tvshows")
 
-    items = otaku_combined.get_combined_items(entry)
+    items = local_otaku_recent.get_recent_items()
 
     for item in items:
         title = item.get("title", "")
@@ -147,6 +147,9 @@ def _plugin_otaku_combined_items(handle, entry):
         rating = item.get("rating")
         if rating:
             info["rating"] = rating
+        plot = item.get("plot")
+        if plot:
+            info["plot"] = plot
         tvshowid = item.get("tvshowid")
         if tvshowid:
             info["dbid"] = tvshowid
@@ -156,9 +159,12 @@ def _plugin_otaku_combined_items(handle, entry):
         if art:
             li.setArt(art)
 
+        uniqueid = item.get("uniqueid") or {}
         mal_id = item.get("mal_id")
         if mal_id:
-            li.setUniqueIDs({"mal": str(mal_id)})
+            uniqueid["mal"] = str(mal_id)
+        if uniqueid:
+            li.setUniqueIDs(uniqueid)
 
         xbmcplugin.addDirectoryItem(handle, file_url, li, isFolder=True)
 
@@ -195,6 +201,12 @@ def _plugin_smartplaylist_items(handle, entry):
         year = item.get("year")
         if year:
             info["year"] = year
+        plot = item.get("plot")
+        if plot:
+            info["plot"] = plot
+        tvshowid = item.get("tvshowid")
+        if tvshowid and kodi_type == "tvshow":
+            info["dbid"] = tvshowid
         li.setInfo("video", info)
 
         art = item.get("art", {})
