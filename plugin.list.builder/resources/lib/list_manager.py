@@ -69,6 +69,22 @@ Local + Otaku Recently Watched:
     "description": ""
 }
 
+Local + Fen Recently Watched Movies:
+{
+    "id": 20261030105754,
+    "type": "local_fen_recent_movies",
+    "label": "Recently Watched Movies",
+    "description": ""
+}
+
+Local + Fen Recently Watched Series (non-anime):
+{
+    "id": 20261030105754,
+    "type": "local_fen_recent_series",
+    "label": "Recently Watched Series",
+    "description": ""
+}
+
 Note (tmdb): first_air_date_gte and first_air_date_gte_days are mutually exclusive.
       When first_air_date_gte_days is set the actual date is computed at build time.
       For movies "first_air_date_gte" maps to "primary_release_date.gte" in the API.
@@ -151,6 +167,20 @@ def add_list(label, description, list_type="tmdb", mediatype=None, update_interv
         entry = {
             "id": list_id,
             "type": "local_otaku_recent",
+            "label": label,
+            "description": description,
+        }
+    elif list_type == "local_fen_recent_movies":
+        entry = {
+            "id": list_id,
+            "type": "local_fen_recent_movies",
+            "label": label,
+            "description": description,
+        }
+    elif list_type == "local_fen_recent_series":
+        entry = {
+            "id": list_id,
+            "type": "local_fen_recent_series",
             "label": label,
             "description": description,
         }
@@ -244,7 +274,7 @@ def needs_update(entry):
     Smartplaylist entries are always dynamic — never need a cache update.
     For tmdb entries: True when last_updated is None or age >= update_interval days.
     """
-    if entry.get("type") in ("smartplaylist", "local_otaku_recent"):
+    if entry.get("type") in ("smartplaylist", "local_otaku_recent", "local_fen_recent_movies", "local_fen_recent_series"):
         return False
     last_updated = entry.get("last_updated")
     if last_updated is None:
@@ -269,7 +299,7 @@ def get_widget_url(entry):
     plugin; cached types (tmdb, mdblist) are routed through Bingie's
     mdblist_locallist handler.
     """
-    if entry.get("type") in ("smartplaylist", "local_otaku_recent"):
+    if entry.get("type") in ("smartplaylist", "local_otaku_recent", "local_fen_recent_movies", "local_fen_recent_series"):
         return "plugin://plugin.list.builder/?list_id={}".format(entry["id"])
     path = get_items_path(entry["id"])
     return "plugin://plugin.video.tmdb.bingie.helper/?info=mdblist_locallist&&{}".format(path)

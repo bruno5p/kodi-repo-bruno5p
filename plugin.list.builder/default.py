@@ -56,6 +56,10 @@ def _plugin_list_items(handle, list_id):
         _plugin_smartplaylist_items(handle, entry)
     elif entry and entry.get("type") == "local_otaku_recent":
         _plugin_local_otaku_recent_items(handle, entry)
+    elif entry and entry.get("type") == "local_fen_recent_movies":
+        _plugin_local_fen_recent_items(handle, entry, "movies")
+    elif entry and entry.get("type") == "local_fen_recent_series":
+        _plugin_local_fen_recent_items(handle, entry, "series")
     else:
         _plugin_tmdb_items(handle, list_id)
 
@@ -167,6 +171,57 @@ def _plugin_local_otaku_recent_items(handle, entry):
             li.setUniqueIDs(uniqueid)
 
         xbmcplugin.addDirectoryItem(handle, file_url, li, isFolder=True)
+
+    xbmcplugin.endOfDirectory(handle, succeeded=True)
+
+
+def _plugin_local_fen_recent_items(handle, entry, kind):
+    """Serve a live recently-watched list from local library + Fen Light watch history.
+    kind: "movies" or "series"
+    """
+    import xbmcgui
+    import xbmcplugin
+    from resources.lib import local_fen_recent
+
+    xbmcplugin.setContent(handle, "videos")
+
+    if kind == "movies":
+        items = local_fen_recent.get_recent_movies()
+    else:
+        items = local_fen_recent.get_recent_series()
+
+    for item in items:
+        title = item.get("title", "")
+        file_url = item.get("file", "")
+
+        li = xbmcgui.ListItem(label=title)
+        info = {"title": title, "mediatype": item.get("mediatype", "video")}
+        year = item.get("year")
+        if year:
+            info["year"] = year
+        rating = item.get("rating")
+        if rating:
+            info["rating"] = rating
+        plot = item.get("plot")
+        if plot:
+            info["plot"] = plot
+        movieid = item.get("movieid")
+        tvshowid = item.get("tvshowid")
+        if movieid:
+            info["dbid"] = movieid
+        elif tvshowid:
+            info["dbid"] = tvshowid
+        li.setInfo("video", info)
+
+        art = item.get("art") or {}
+        if art:
+            li.setArt(art)
+
+        uniqueid = item.get("uniqueid") or {}
+        if uniqueid:
+            li.setUniqueIDs(uniqueid)
+
+        xbmcplugin.addDirectoryItem(handle, file_url, li, isFolder=item.get("is_folder", True))
 
     xbmcplugin.endOfDirectory(handle, succeeded=True)
 

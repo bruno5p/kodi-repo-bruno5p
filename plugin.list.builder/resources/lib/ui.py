@@ -98,6 +98,10 @@ def show_management():
                 ))
             elif entry.get("type") == "local_otaku_recent":
                 menu_items.append("{} [COLOR gray](local + otaku recent)[/COLOR]".format(entry["label"]))
+            elif entry.get("type") == "local_fen_recent_movies":
+                menu_items.append("{} [COLOR gray](local + fen movies)[/COLOR]".format(entry["label"]))
+            elif entry.get("type") == "local_fen_recent_series":
+                menu_items.append("{} [COLOR gray](local + fen series)[/COLOR]".format(entry["label"]))
             elif entry.get("type") == "mdblist":
                 last = entry.get("last_updated") or "never"
                 menu_items.append("{} [COLOR gray](mdblist, updated: {})[/COLOR]".format(
@@ -139,6 +143,15 @@ def _show_list_actions(entry):
             show_widget_url(entry)
         elif choice == 2:
             _confirm_delete(entry)
+    elif entry.get("type") in ("local_fen_recent_movies", "local_fen_recent_series"):
+        actions = ["Rename", "Show widget URL", "Delete"]
+        choice = xbmcgui.Dialog().select(entry["label"], actions)
+        if choice == 0:
+            _show_rename_local_fen_recent(entry)
+        elif choice == 1:
+            show_widget_url(entry)
+        elif choice == 2:
+            _confirm_delete(entry)
     elif entry.get("type") == "mdblist":
         actions = ["Update now", "Edit", "Show widget URL", "Delete"]
         choice = xbmcgui.Dialog().select(entry["label"], actions)
@@ -164,7 +177,7 @@ def _show_list_actions(entry):
 
 
 def _offer_immediate_build(entry):
-    if entry.get("type") in ("smartplaylist", "local_otaku_recent"):
+    if entry.get("type") in ("smartplaylist", "local_otaku_recent", "local_fen_recent_movies", "local_fen_recent_series"):
         return  # dynamic — no build step needed
 
     do_build = xbmcgui.Dialog().yesno(
@@ -262,7 +275,10 @@ def show_add_list():
     """
     d = xbmcgui.Dialog()
     source_choice = d.select("List type", [
-        "TMDb Discover", "Smart Playlist Sampler", "MDBList", "Local + Otaku Recently Watched",
+        "TMDb Discover", "Smart Playlist Sampler", "MDBList",
+        "Local + Otaku Recently Watched",
+        "Local + Fen Recently Watched Movies",
+        "Local + Fen Recently Watched Series",
     ])
     if source_choice < 0:
         return None
@@ -272,6 +288,10 @@ def show_add_list():
         return _show_add_mdblist()
     if source_choice == 3:
         return _show_add_local_otaku_recent()
+    if source_choice == 4:
+        return _show_add_local_fen_recent("movies")
+    if source_choice == 5:
+        return _show_add_local_fen_recent("series")
     return _show_add_tmdb_list()
 
 
@@ -521,6 +541,38 @@ def _show_add_local_otaku_recent():
 
 def _show_rename_local_otaku_recent(entry):
     """Rename a Local + Otaku Recently Watched list."""
+    val = xbmcgui.Dialog().input(
+        "List name", defaultt=entry["label"], type=xbmcgui.INPUT_ALPHANUM
+    )
+    if val and val != entry["label"]:
+        list_manager.update_list(entry["id"], {"label": val})
+        xbmcgui.Dialog().notification(
+            _ADDON_NAME, "'{}' renamed.".format(val),
+            xbmcgui.NOTIFICATION_INFO, 2000,
+        )
+
+
+def _show_add_local_fen_recent(kind):
+    """
+    Create a Local + Fen Recently Watched list (movies or series). Only asks for a name.
+    kind: "movies" or "series"
+    Returns the new list entry dict on success, or None if cancelled.
+    """
+    d = xbmcgui.Dialog()
+    if kind == "movies":
+        default_name = "Recently Watched Movies"
+        list_type = "local_fen_recent_movies"
+    else:
+        default_name = "Recently Watched Series"
+        list_type = "local_fen_recent_series"
+    label = d.input("List name", defaultt=default_name, type=xbmcgui.INPUT_ALPHANUM)
+    if not label:
+        return None
+    return list_manager.add_list(label=label, description="", list_type=list_type)
+
+
+def _show_rename_local_fen_recent(entry):
+    """Rename a Local + Fen Recently Watched list."""
     val = xbmcgui.Dialog().input(
         "List name", defaultt=entry["label"], type=xbmcgui.INPUT_ALPHANUM
     )
