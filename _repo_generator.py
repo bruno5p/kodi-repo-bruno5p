@@ -254,77 +254,20 @@ def get_addon_xml_content(addon_dir: Path) -> str:
 
 
 def build_addon_index_html(addon_dir: Path, addon_id: str, version: str) -> None:
-    tree = ET.parse(addon_dir / "addon.xml")
-    root = tree.getroot()
-    name = root.attrib.get("name", addon_id)
-
-    summary = ""
-    description = ""
-    for ext in root.findall("extension"):
-        if ext.attrib.get("point") == "xbmc.addon.metadata":
-            s = ext.find("summary")
-            d = ext.find("description")
-            if s is not None and s.text:
-                summary = s.text.strip()
-            if d is not None and d.text:
-                description = d.text.strip()
-
     zip_name = f"{addon_id}-{version}.zip"
-    zip_url = f"{PAGES_BASE}/{addon_id}/{zip_name}"
-
-    html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{name} — Bruno5p Repository</title>
-  <style>
-    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0f0f13; color: #e0e0e0;
-      min-height: 100vh; display: flex; flex-direction: column;
-      align-items: center; padding: 3rem 1.5rem;
-    }}
-    a {{ color: #4a9eff; text-decoration: none; }}
-    a:hover {{ text-decoration: underline; }}
-    .card {{
-      background: #1a1a22; border: 1px solid #2a2a35; border-radius: 12px;
-      padding: 2rem; max-width: 620px; width: 100%;
-    }}
-    .back {{ margin-bottom: 1.5rem; font-size: 0.88rem; color: #555; }}
-    .back a {{ color: #666; }}
-    h1 {{ font-size: 1.5rem; color: #fff; margin-bottom: 0.3rem; }}
-    .addon-id {{ font-family: monospace; font-size: 0.82rem; color: #555; margin-bottom: 1rem; }}
-    .summary {{ color: #aaa; font-size: 0.95rem; margin-bottom: 0.8rem; line-height: 1.5; }}
-    .description {{ color: #888; font-size: 0.88rem; line-height: 1.6; margin-bottom: 1.5rem; }}
-    .version-tag {{
-      display: inline-block; background: #1e2a1e; color: #6fcf6f;
-      font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.5rem;
-      border-radius: 4px; font-family: monospace; margin-bottom: 1.5rem;
-    }}
-    .download {{
-      display: inline-block; background: #1a6ef5; color: #fff;
-      font-weight: 600; padding: 0.6rem 1.2rem; border-radius: 8px;
-      font-size: 0.9rem;
-    }}
-    .download:hover {{ background: #1558cc; text-decoration: none; }}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="back"><a href="../">← Bruno5p Repository</a></div>
-    <h1>{name}</h1>
-    <div class="addon-id">{addon_id}</div>
-    <div class="version-tag">v{version}</div>
-    <div class="summary">{summary}</div>
-    <div class="description">{description}</div>
-    <a class="download" href="{zip_name}">Download {zip_name}</a>
-  </div>
-</body>
-</html>
-"""
+    html = f"<!DOCTYPE html>\n<a href=\"{zip_name}\">{zip_name}</a>\n"
     (addon_dir / "index.html").write_text(html, encoding="utf-8")
+
+
+def build_root_index_html(addon_dirs: list[Path]) -> None:
+    lines = ["<!DOCTYPE html>"]
+    for addon_dir in addon_dirs:
+        name = addon_dir.name
+        lines.append(f'<a href="{name}/">{name}/</a>')
+    lines.append('<a href="addons.xml">addons.xml</a>')
+    lines.append('<a href="addons.xml.md5">addons.xml.md5</a>')
+    lines.append("")
+    (REPO_ROOT / "index.html").write_text("\n".join(lines), encoding="utf-8")
 
 
 def build_addons_xml(addon_dirs: list[Path]) -> bytes:
@@ -375,6 +318,9 @@ def main() -> None:
         write_md5(zip_path)
         build_addon_index_html(addon_dir, addon_id, version)
         print(f"  {zip_path.name}")
+
+    print("\nGenerating index pages...")
+    build_root_index_html(addon_dirs)
 
     print("\nGenerating addons.xml...")
     addons_xml_bytes = build_addons_xml(addon_dirs)
