@@ -21,6 +21,7 @@ import xbmcvfs
 from resources.lib.logger import logger
 
 _FEN_WATCHED_DB = "special://profile/addon_data/plugin.video.fenlight/databases/watched.db"
+_POSTER_CACHE_PATH = "special://profile/addon_data/plugin.list.builder/fen_poster_cache.json"
 
 
 def _rpc(method, params):
@@ -225,11 +226,100 @@ def _merge_and_sort(fen_items, local_items):
     return with_ts + without_ts
 
 
+def _load_poster_cache():
+    path = xbmcvfs.translatePath(_POSTER_CACHE_PATH)
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _save_poster_cache(cache):
+    path = xbmcvfs.translatePath(_POSTER_CACHE_PATH)
+    try:
+        with open(path, "w") as f:
+            json.dump(cache, f)
+    except Exception as e:
+        logger.debug("local_fen_recent: failed to save poster cache: {}".format(e))
+
+
+def _fetch_tmdb_poster(tmdb_id, mediatype, api_key):
+    endpoint_type = "tv" if mediatype == "tvshow" else "movie"
+    url = "https://api.themoviedb.org/3/{}/{}".format(endpoint_type, tmdb_id)
+    try:
+        import requests
+        response = requests.get(url, params={"api_key": api_key}, timeout=10)
+        response.raise_for_status()
+        poster_path = response.json().get("poster_path")
+        if poster_path:
+            return "https://image.tmdb.org/t/p/w500{}".format(poster_path)
+    except Exception as e:
+        logger.debug("local_fen_recent: TMDb poster fetch failed tmdb_id={}: {}".format(tmdb_id, e))
+    return None
+
+
+def _enrich_art(items):
+    """Fetch TMDb poster for items with no art (Fen-only items). Uses a disk cache."""
+    needs_poster = [item for item in items if not item.get("art") and item.get("tmdb_id")]
+    if not needs_poster:
+        return items
+
+    from resources.lib.tmdb_api import resolve_api_key
+    import xbmcaddon
+    configured_key = xbmcaddon.Addon().getSetting("tmdb_api_key").strip()
+    api_key, _ = resolve_api_key(configured_key)
+    if not api_key:
+        logger.warning("local_fen_recent: no TMDb API key — poster art missing for Fen-only items")
+        return items
+
+    cache = _load_poster_cache()
+    cache_dirty = False
+
+    uncached = [item for item in needs_poster if str(item["tmdb_id"]) not in cache]
+
+    if uncached:
+        logger.info("local_fen_recent: fetching posters for {} uncached Fen-only items".format(len(uncached)))
+        try:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
+            def fetch(item):
+                return item, _fetch_tmdb_poster(item["tmdb_id"], item.get("mediatype", "movie"), api_key)
+
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = [executor.submit(fetch, item) for item in uncached]
+                for future in as_completed(futures):
+                    try:
+                        item, poster_url = future.result()
+                        cache[str(item["tmdb_id"])] = poster_url or ""
+                        cache_dirty = True
+                    except Exception as e:
+                        logger.debug("local_fen_recent: poster enrich error: {}".format(e))
+        except ImportError:
+            for item in uncached:
+                poster_url = _fetch_tmdb_poster(item["tmdb_id"], item.get("mediatype", "movie"), api_key)
+                cache[str(item["tmdb_id"])] = poster_url or ""
+                cache_dirty = True
+
+    for item in needs_poster:
+        poster_url = cache.get(str(item["tmdb_id"]))
+        if poster_url:
+            item["art"] = {"poster": poster_url}
+
+    if cache_dirty:
+        _save_poster_cache(cache)
+
+    return items
+
+
 def get_recent_movies():
     """Recently watched movies: local library + Fen Light, sorted by lastplayed desc."""
     fen = [i for i in _read_fen_recent() if i.get("mediatype") == "movie"]
     local = [i for i in _fetch_local_recent() if i.get("mediatype") == "movie"]
     items = _merge_and_sort(fen, local)
+    items = _enrich_art(items)
     logger.info("local_fen_recent: {} movies".format(len(items)))
     return items
 
@@ -239,5 +329,6 @@ def get_recent_series():
     fen = [i for i in _read_fen_recent() if i.get("mediatype") == "tvshow"]
     local = [i for i in _fetch_local_recent() if i.get("mediatype") == "tvshow"]
     items = _merge_and_sort(fen, local)
+    items = _enrich_art(items)
     logger.info("local_fen_recent: {} series".format(len(items)))
     return items
