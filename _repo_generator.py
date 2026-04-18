@@ -235,7 +235,7 @@ def build_zip(addon_dir: Path, addon_id: str, version: str) -> Path:
             if suffix in SKIP_EXTENSIONS:
                 continue
             rel = file_path.relative_to(addon_dir)
-            zf.write(file_path, f"{addon_id}/{rel}")
+            zf.write(file_path, f"{addon_id}/{rel.as_posix()}")
 
     return zip_path
 
