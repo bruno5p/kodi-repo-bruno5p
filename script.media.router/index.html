@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Media Router — Bruno5p Repository</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f0f13; color: #e0e0e0;
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; padding: 3rem 1.5rem;
+    }
+    a { color: #4a9eff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .card {
+      background: #1a1a22; border: 1px solid #2a2a35; border-radius: 12px;
+      padding: 2rem; max-width: 620px; width: 100%;
+    }
+    .back { margin-bottom: 1.5rem; font-size: 0.88rem; color: #555; }
+    .back a { color: #666; }
+    h1 { font-size: 1.5rem; color: #fff; margin-bottom: 0.3rem; }
+    .addon-id { font-family: monospace; font-size: 0.82rem; color: #555; margin-bottom: 1rem; }
+    .summary { color: #aaa; font-size: 0.95rem; margin-bottom: 0.8rem; line-height: 1.5; }
+    .description { color: #888; font-size: 0.88rem; line-height: 1.6; margin-bottom: 1.5rem; }
+    .version-tag {
+      display: inline-block; background: #1e2a1e; color: #6fcf6f;
+      font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.5rem;
+      border-radius: 4px; font-family: monospace; margin-bottom: 1.5rem;
+    }
+    .download {
+      display: inline-block; background: #1a6ef5; color: #fff;
+      font-weight: 600; padding: 0.6rem 1.2rem; border-radius: 8px;
+      font-size: 0.9rem;
+    }
+    .download:hover { background: #1558cc; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="back"><a href="../">← Bruno5p Repository</a></div>
+    <h1>Media Router</h1>
+    <div class="addon-id">script.media.router</div>
+    <div class="version-tag">v1.1.0</div>
+    <div class="summary">Route media playback between local library and streaming addons</div>
+    <div class="description">Routes anime, TV shows, and movies to local playback or streaming addons (Otaku Testing, TMDb Helper) based on configurable per-type settings. Call via: RunScript(script.media.router, anime|tvshow|movie, ID)</div>
+    <a class="download" href="script.media.router-1.1.0.zip">Download script.media.router-1.1.0.zip</a>
+  </div>
+</body>
+</html>

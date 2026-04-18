@@ -3,9 +3,9 @@
 	<requires/>
 	<extension point="xbmc.addon.repository" name="Bruno5p Repository">
 		<dir>
-			<info compressed="false">https://raw.githubusercontent.com/bruno5p/repository.bruno5p/main/addons.xml</info>
-			<checksum>https://raw.githubusercontent.com/bruno5p/repository.bruno5p/main/addons.xml.md5</checksum>
-			<datadir zip="true">https://raw.githubusercontent.com/bruno5p/repository.bruno5p/main/</datadir>
+			<info compressed="false">https://bruno5p.github.io/kodi-repo-bruno5p/addons.xml</info>
+			<checksum>https://bruno5p.github.io/kodi-repo-bruno5p/addons.xml.md5</checksum>
+			<datadir zip="true">https://bruno5p.github.io/kodi-repo-bruno5p/</datadir>
 		</dir>
 	</extension>
 	<extension point="xbmc.addon.metadata">
