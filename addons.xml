@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addons>
+	<addon id="metadata.anime.mal" version="1.0.0" name="Anime Scraper (MyAnimeList)" provider-name="bruno5p">
+		<requires>
+			<import addon="xbmc.python" version="3.0.0" />
+			<import addon="xbmc.metadata" version="2.1.0" />
+		</requires>
+		<extension point="xbmc.metadata.scraper.tvshows" language="en" library="main.py" />
+		<extension point="xbmc.addon.metadata">
+			<summary lang="en">Anime metadata from MyAnimeList</summary>
+			<description lang="en">Fetches anime metadata from MyAnimeList via the Jikan API (jikan.moe). Anime movies, OVAs, and specials are treated as Season 0 episodes so entire franchises are managed under one TV show entry.</description>
+			<disclaimer lang="en">Data is provided by MyAnimeList via the unofficial Jikan API. Not affiliated with MyAnimeList.</disclaimer>
+			<license>GPL-2.0-only</license>
+			<website>https://myanimelist.net</website>
+			<source>https://github.com/bruno5p/metadata.anime.mal</source>
+			<news>1.0.0: Initial release</news>
+		</extension>
+	</addon>
+	<addon id="plugin.list.builder" version="1.1.0" name="List Builder" provider-name="bruno5p">
+		<requires>
+			<import addon="xbmc.python" version="3.0.0" />
+			<import addon="script.module.requests" version="2.9.1" />
+		</requires>
+		<extension point="xbmc.python.script" library="default.py">
+			<provides>executable</provides>
+		</extension>
+		<extension point="xbmc.python.pluginsource" library="default.py">
+			<provides>video</provides>
+		</extension>
+		<extension point="xbmc.service" library="service.py" start="login" />
+		<extension point="xbmc.addon.metadata">
+			<summary lang="en_GB">List Builder — TMDb &amp; Smart Playlist Sampler</summary>
+			<description lang="en_GB">Build and browse curated video lists from multiple sources: TMDb Discover API filters, or dynamic samplers from your Kodi smart playlists. Integrates with Bingie Helper via mdblist_locallist.</description>
+			<license>GPL-2.0-only</license>
+			<platform>all</platform>
+		</extension>
+	</addon>
+	<addon id="repository.bruno5p" name="Bruno5p Repository" version="1.0.0" provider-name="bruno5p">
+		<requires />
+		<extension point="xbmc.addon.repository" name="Bruno5p Repository">
+			<dir>
+				<info compressed="false">https://raw.githubusercontent.com/bruno5p/repository.bruno5p/main/addons.xml</info>
+				<checksum>https://raw.githubusercontent.com/bruno5p/repository.bruno5p/main/addons.xml.md5</checksum>
+				<datadir zip="true">https://raw.githubusercontent.com/bruno5p/repository.bruno5p/main/</datadir>
+			</dir>
+		</extension>
+		<extension point="xbmc.addon.metadata">
+			<summary lang="en">Bruno5p Repository</summary>
+			<description lang="en">Personal Kodi addons by bruno5p: anime tools, MAL integration, media routing.</description>
+			<disclaimer />
+			<platform>all</platform>
+			<assets>
+				<icon>icon.png</icon>
+				<fanart>fanart.jpg</fanart>
+			</assets>
+		</extension>
+	</addon>
+	<addon id="script.anime.library" version="1.0.0" name="Anime Library Manager" provider-name="bruno5p">
+		<requires>
+			<import addon="xbmc.python" version="3.0.0" />
+		</requires>
+		<extension point="xbmc.python.script" library="default.py">
+			<provides>executable</provides>
+		</extension>
+		<extension point="kodi.context.item" library="context.py">
+			<menu id="kodi_action_browse_items">
+				<item>
+					<label>Update Anime Library</label>
+					<condition>Window.IsVisible(Videos)</condition>
+				</item>
+			</menu>
+		</extension>
+		<extension point="xbmc.addon.metadata">
+			<summary lang="en">Rebuilds the anime symlink tree and triggers a Kodi library scan</summary>
+			<description lang="en">Maintains a flat symlink directory inside your Anime folder so Kodi can scan nested anime collections (one MAL season = one folder). Run from Programs or the Video Library context menu to rebuild symlinks and rescan.</description>
+			<license>GPL-2.0-only</license>
+			<source>https://github.com/bruno5p/repository.bruno5p</source>
+			<news>1.0.0: Initial release</news>
+		</extension>
+	</addon>
+	<addon id="script.mal.manager" version="1.3.0" name="MAL Manager" provider-name="bruno5p">
+		<requires>
+			<import addon="xbmc.python" version="3.0.0" />
+		</requires>
+		<extension point="xbmc.python.script" library="default.py">
+			<provides>executable</provides>
+		</extension>
+		<extension point="kodi.context.item">
+			<menu id="kodi.core.main">
+				<item library="context.py" args="malstatus">
+					<label>MAL Status</label>
+					<visible>[String.IsEqual(ListItem.DBTYPE,tvshow)|String.IsEqual(ListItem.DBTYPE,movie)]</visible>
+				</item>
+				<item library="context.py" args="sync">
+					<label>Sync MAL Library</label>
+					<visible>true</visible>
+				</item>
+			</menu>
+		</extension>
+		<extension point="xbmc.addon.metadata">
+			<summary lang="en_GB">Manage MyAnimeList watchlist from Kodi</summary>
+			<description lang="en_GB">Authenticate with MyAnimeList and manage your anime watchlist: mark watched, update score, change status. Context menu item on any anime tvshow or movie.</description>
+			<license>GPL-2.0-only</license>
+			<platform>all</platform>
+		</extension>
+	</addon>
+	<addon id="script.media.router" version="1.1.0" name="Media Router" provider-name="bruno5p">
+		<requires>
+			<import addon="xbmc.python" version="3.0.0" />
+		</requires>
+		<extension point="xbmc.python.script" library="default.py">
+			<provides>executable</provides>
+		</extension>
+		<extension point="xbmc.addon.metadata">
+			<summary lang="en_GB">Route media playback between local library and streaming addons</summary>
+			<description lang="en_GB">Routes anime, TV shows, and movies to local playback or streaming addons (Otaku Testing, TMDb Helper) based on configurable per-type settings. Call via: RunScript(script.media.router, anime|tvshow|movie, ID)</description>
+			<license>GPL-2.0-only</license>
+			<platform>all</platform>
+		</extension>
+	</addon>
+</addons>
