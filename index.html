@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bruno5p Kodi Repository</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f0f13;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 3rem 1.5rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    header h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.5px;
+    }
+
+    header p {
+      margin-top: 0.6rem;
+      color: #888;
+      font-size: 1rem;
+    }
+
+    .badge {
+      display: inline-block;
+      background: #1a6ef5;
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      margin-bottom: 0.8rem;
+    }
+
+    .card {
+      background: #1a1a22;
+      border: 1px solid #2a2a35;
+      border-radius: 12px;
+      padding: 1.8rem 2rem;
+      max-width: 680px;
+      width: 100%;
+      margin-bottom: 1.5rem;
+    }
+
+    .card h2 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 1rem;
+    }
+
+    .steps ol {
+      padding-left: 1.4rem;
+      line-height: 1.9;
+      color: #ccc;
+      font-size: 0.95rem;
+    }
+
+    .steps ol li + li { margin-top: 0.4rem; }
+
+    .steps a { color: #4a9eff; text-decoration: none; }
+    .steps a:hover { text-decoration: underline; }
+
+    code {
+      background: #0d0d14;
+      border: 1px solid #2a2a38;
+      border-radius: 5px;
+      padding: 0.15em 0.45em;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.85em;
+      color: #a78bfa;
+    }
+
+    .addon-list {
+      list-style: none;
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .addon-list li {
+      background: #11111a;
+      border: 1px solid #222230;
+      border-radius: 8px;
+      padding: 0.9rem 1.1rem;
+    }
+
+    .addon-name {
+      font-weight: 600;
+      color: #fff;
+      font-size: 0.95rem;
+    }
+
+    .addon-id {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.78rem;
+      color: #666;
+      margin-top: 0.15rem;
+    }
+
+    .addon-desc {
+      font-size: 0.88rem;
+      color: #aaa;
+      margin-top: 0.35rem;
+      line-height: 1.5;
+    }
+
+    .version-tag {
+      display: inline-block;
+      background: #1e2a1e;
+      color: #6fcf6f;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+      margin-top: 0.4rem;
+      font-family: monospace;
+    }
+
+    footer {
+      margin-top: 2rem;
+      color: #444;
+      font-size: 0.82rem;
+      text-align: center;
+    }
+
+    footer a { color: #555; }
+    footer a:hover { color: #888; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge">Kodi Repository</div>
+    <h1>Bruno5p Repository</h1>
+    <p>Personal Kodi addons — anime tools, MAL integration &amp; media routing</p>
+  </header>
+
+  <div class="card steps">
+    <h2>How to Install</h2>
+    <ol>
+      <li>
+        In Kodi, go to <strong>Settings → System → Add-ons</strong> and enable
+        <em>Unknown sources</em>.
+      </li>
+      <li>
+        Download the repository zip:<br />
+        <a href="repository.bruno5p/repository.bruno5p-1.0.0.zip">
+          repository.bruno5p-1.0.0.zip
+        </a>
+      </li>
+      <li>
+        In Kodi go to <strong>Add-ons → Install from zip file</strong> and select
+        the downloaded file.
+      </li>
+      <li>
+        Once installed, go to <strong>Install from repository → Bruno5p Repository</strong>
+        and install any addon.
+      </li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>Available Add-ons</h2>
+    <ul class="addon-list">
+      <li>
+        <div class="addon-name">Anime Scraper (MyAnimeList)</div>
+        <div class="addon-id">metadata.anime.mal</div>
+        <div class="addon-desc">Fetches anime metadata from MyAnimeList via the Jikan API. Movies, OVAs and specials appear as Season 0.</div>
+        <div class="version-tag">v1.0.0</div>
+      </li>
+      <li>
+        <div class="addon-name">List Builder</div>
+        <div class="addon-id">plugin.list.builder</div>
+        <div class="addon-desc">Build and browse curated video lists from TMDb Discover filters or dynamic samplers from Kodi smart playlists.</div>
+        <div class="version-tag">v1.1.0</div>
+      </li>
+      <li>
+        <div class="addon-name">Anime Library Manager</div>
+        <div class="addon-id">script.anime.library</div>
+        <div class="addon-desc">Rebuilds the anime symlink tree and triggers a Kodi library scan so nested anime collections are properly indexed.</div>
+        <div class="version-tag">v1.0.0</div>
+      </li>
+      <li>
+        <div class="addon-name">MAL Manager</div>
+        <div class="addon-id">script.mal.manager</div>
+        <div class="addon-desc">Authenticate with MyAnimeList and manage your anime watchlist directly from the Kodi context menu.</div>
+        <div class="version-tag">v1.3.0</div>
+      </li>
+      <li>
+        <div class="addon-name">Media Router</div>
+        <div class="addon-id">script.media.router</div>
+        <div class="addon-desc">Routes anime, TV shows and movies to local playback or streaming addons based on configurable per-type settings.</div>
+        <div class="version-tag">v1.1.0</div>
+      </li>
+    </ul>
+  </div>
+
+  <footer>
+    <a href="https://github.com/bruno5p/repository.bruno5p">GitHub</a> &middot;
+    Powered by <a href="https://kodi.tv">Kodi</a>
+  </footer>
+
+</body>
+</html>
