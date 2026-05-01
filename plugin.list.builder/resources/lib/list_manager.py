@@ -280,8 +280,9 @@ def needs_update(entry):
     if last_updated is None:
         return True
     try:
-        last_dt = datetime.strptime(last_updated, "%Y-%m-%d")
-    except ValueError:
+        year, month, day = last_updated.split("-")
+        last_dt = datetime(int(year), int(month), int(day))
+    except (ValueError, AttributeError):
         return True
     interval = entry.get("update_interval", 30)
     return datetime.now() >= last_dt + timedelta(days=interval)

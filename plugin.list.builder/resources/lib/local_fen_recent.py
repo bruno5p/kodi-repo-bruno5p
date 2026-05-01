@@ -207,7 +207,7 @@ def _fetch_local_recent():
 
 
 def _merge_and_sort(fen_items, local_items):
-    """Dedup (local wins), sort descending by lastplayed. Returns merged list."""
+    """Dedup (local wins), sort descending by lastplayed. Items with no play record are excluded."""
     merged = {}
     for item in fen_items:
         key = item.pop("_dedup_key")
@@ -216,14 +216,11 @@ def _merge_and_sort(fen_items, local_items):
         key = item.pop("_dedup_key")
         merged[key] = item
 
-    all_items = list(merged.values())
-    with_ts = sorted(
-        [i for i in all_items if i.get("lastplayed")],
+    return sorted(
+        [i for i in merged.values() if i.get("lastplayed")],
         key=lambda x: x["lastplayed"],
         reverse=True,
     )
-    without_ts = [i for i in all_items if not i.get("lastplayed")]
-    return with_ts + without_ts
 
 
 def _load_poster_cache():

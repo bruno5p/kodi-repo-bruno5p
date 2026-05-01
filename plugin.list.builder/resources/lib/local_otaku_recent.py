@@ -9,9 +9,8 @@ Otaku source: watch_history.json read directly from Otaku's addon_data folder,
 Deduplication key: MAL ID when available, lowercased title otherwise.
 Local takes priority over Otaku in dedup.
 
-Sort: items with a lastplayed timestamp come first (descending), then
-items not in the local library at all, in their original Otaku history order
-(most recent first by array index).
+Sort: descending by lastplayed. Items with no play record (no Kodi MyVideos.db
+entry and not in local library) are excluded.
 """
 
 import glob
@@ -262,22 +261,14 @@ def get_recent_items():
 
     all_items = list(merged.values())
 
-    with_timestamp = sorted(
+    items = sorted(
         [i for i in all_items if i.get("lastplayed")],
         key=lambda x: x["lastplayed"],
         reverse=True,
     )
-    without_timestamp = sorted(
-        [i for i in all_items if not i.get("lastplayed")],
-        key=lambda x: x.get("_otaku_idx") if x.get("_otaku_idx") is not None else 9999,
-    )
-
-    items = with_timestamp + without_timestamp
 
     for item in items:
         item.pop("_otaku_idx", None)
 
-    logger.info("local_otaku_recent: {} items ({} with timestamp, {} otaku-only)".format(
-        len(items), len(with_timestamp), len(without_timestamp)
-    ))
+    logger.info("local_otaku_recent: {} watched items".format(len(items)))
     return items
