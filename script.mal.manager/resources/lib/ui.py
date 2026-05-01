@@ -10,7 +10,17 @@ from resources.lib import auth, mal_api
 
 ADDON = xbmcaddon.Addon()
 
-ACTIONS = ["Mark as Watching", "Update Episodes Watched", "Mark as Completed", "Update Score", "Change Status", "Add to Plan to Watch"]
+ACTIONS = [
+    "Update from MAL",
+    "Update to MAL",
+    "Reset to MAL status",
+    "Mark as Watching",
+    "Update Episodes Watched",
+    "Mark as Completed",
+    "Update Score",
+    "Change Status",
+    "Add to Plan to Watch",
+]
 
 
 def show_manager(mal_id):
@@ -56,16 +66,22 @@ def show_manager(mal_id):
     )
 
     if choice == 0:
-        _set_status(mal_id, mal_api.STATUS_WATCHING)
+        _sync_single_item(mal_id, "from_mal")
     elif choice == 1:
-        _update_episodes(mal_id, current_watched)
+        _sync_single_item(mal_id, "to_mal")
     elif choice == 2:
-        _set_status(mal_id, mal_api.STATUS_COMPLETED)
+        _sync_single_item(mal_id, "force_from_mal")
     elif choice == 3:
-        _update_score(mal_id, current_score)
+        _set_status(mal_id, mal_api.STATUS_WATCHING)
     elif choice == 4:
-        _change_status(mal_id, current_status)
+        _update_episodes(mal_id, current_watched)
     elif choice == 5:
+        _set_status(mal_id, mal_api.STATUS_COMPLETED)
+    elif choice == 6:
+        _update_score(mal_id, current_score)
+    elif choice == 7:
+        _change_status(mal_id, current_status)
+    elif choice == 8:
         _set_status(mal_id, mal_api.STATUS_PLAN_TO_WATCH)
     # choice == -1: cancelled
 
@@ -140,6 +156,39 @@ def _change_status(mal_id, current_status):
 
     new_status = keys[choice]
     _set_status(mal_id, new_status)
+
+
+def _sync_single_item(mal_id, direction):
+    from resources.lib import sync
+
+    xbmcgui.Dialog().notification("MAL Sync", "Syncing…", xbmcgui.NOTIFICATION_INFO, 1500)
+    try:
+        if direction == "from_mal":
+            updated, skipped, errors = sync.sync_single_from_mal(mal_id)
+        elif direction == "to_mal":
+            updated, skipped, errors = sync.sync_single_to_mal(mal_id)
+        else:
+            updated, skipped, errors = sync.force_sync_single_from_mal(mal_id)
+    except Exception as exc:
+        logger.error("ui: single sync exception: {}".format(exc))
+        xbmcgui.Dialog().notification("MAL Sync", "Sync failed — check log", xbmcgui.NOTIFICATION_ERROR, 4000)
+        return
+
+    if updated > 0:
+        xbmc.executebuiltin("UpdateLibrary(video)")
+
+    if updated == 0 and skipped == 0 and errors == 0:
+        msg, icon = "Not found in Kodi library", xbmcgui.NOTIFICATION_WARNING
+    elif errors:
+        msg, icon = "Sync error — check log", xbmcgui.NOTIFICATION_ERROR
+    elif updated > 0:
+        msg, icon = "Sync complete — updated", xbmcgui.NOTIFICATION_INFO
+    else:
+        msg, icon = "Already up to date", xbmcgui.NOTIFICATION_INFO
+
+    logger.info("ui: single sync {} for mal_id={} — updated={} skipped={} errors={}".format(
+        direction, mal_id, updated, skipped, errors))
+    xbmcgui.Dialog().notification("MAL Sync", msg, icon, 3000)
 
 
 # ── Library sync ──────────────────────────────────────────────────────────────

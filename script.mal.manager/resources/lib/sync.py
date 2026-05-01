@@ -362,3 +362,131 @@ def force_sync_from_mal(on_progress=None, is_cancelled=None):
 
     logger.info("force_sync_from_mal: done — updated={} skipped={} errors={}".format(updated, skipped, errors))
     return updated, skipped, errors
+
+
+# ── Single-item sync ──────────────────────────────────────────────────────────
+
+def sync_single_from_mal(mal_id):
+    """Update from MAL for one item (MAL → Kodi, keep higher local)."""
+    items = [i for i in _get_library_anime() if i["mal_id"] == mal_id]
+    if not items:
+        return 0, 0, 0
+    updated = skipped = errors = 0
+    for item in items:
+        mal_status_data = mal_api.get_anime_list_status(item["mal_id"])
+        if mal_status_data is None:
+            skipped += 1
+            continue
+        mal_status = mal_status_data.get("status")
+        mal_watched_ep = mal_status_data.get("num_episodes_watched", 0) or 0
+        try:
+            if mal_status == mal_api.STATUS_COMPLETED and not item["watched"]:
+                logger.info("sync_single_from_mal: '{}' completed on MAL, updating Kodi".format(item["title"]))
+                _mark_kodi_watched(item)
+                updated += 1
+            elif (mal_status == mal_api.STATUS_WATCHING
+                  and item["type"] == "tvshow"
+                  and mal_watched_ep > item["watched_episodes"]):
+                logger.info("sync_single_from_mal: '{}' watching on MAL ({} ep), updating Kodi".format(
+                    item["title"], mal_watched_ep))
+                _mark_kodi_episodes_watched(item, mal_watched_ep)
+                updated += 1
+            else:
+                skipped += 1
+        except Exception as exc:
+            logger.error("sync_single_from_mal: failed to update '{}': {}".format(item["title"], exc))
+            errors += 1
+    logger.info("sync_single_from_mal: mal_id={} — updated={} skipped={} errors={}".format(
+        mal_id, updated, skipped, errors))
+    return updated, skipped, errors
+
+
+def sync_single_to_mal(mal_id):
+    """Update to MAL for one item (Kodi → MAL, keep higher MAL)."""
+    items = [i for i in _get_library_anime() if i["mal_id"] == mal_id]
+    if not items:
+        return 0, 0, 0
+    updated = skipped = errors = 0
+    for item in items:
+        kodi_watched_ep = item["watched_episodes"]
+        if kodi_watched_ep == 0:
+            skipped += 1
+            continue
+        mal_status_data = mal_api.get_anime_list_status(item["mal_id"])
+        mal_status = mal_status_data.get("status") if mal_status_data else None
+        mal_watched_ep = (mal_status_data.get("num_episodes_watched", 0) or 0) if mal_status_data else 0
+        try:
+            if item["watched"]:
+                if mal_status == mal_api.STATUS_COMPLETED:
+                    skipped += 1
+                    continue
+                logger.info("sync_single_to_mal: '{}' fully watched, updating MAL to completed".format(item["title"]))
+                result = mal_api.update_anime_status(item["mal_id"], status=mal_api.STATUS_COMPLETED)
+                if result:
+                    updated += 1
+                else:
+                    logger.error("sync_single_to_mal: failed to update '{}' on MAL".format(item["title"]))
+                    errors += 1
+            elif item["type"] == "tvshow" and kodi_watched_ep > mal_watched_ep:
+                logger.info("sync_single_to_mal: '{}' partial Kodi={} MAL={}, updating MAL".format(
+                    item["title"], kodi_watched_ep, mal_watched_ep))
+                result = mal_api.update_anime_status(
+                    item["mal_id"],
+                    status=mal_api.STATUS_WATCHING,
+                    num_watched=kodi_watched_ep,
+                )
+                if result:
+                    updated += 1
+                else:
+                    logger.error("sync_single_to_mal: failed to update '{}' on MAL".format(item["title"]))
+                    errors += 1
+            else:
+                skipped += 1
+        except Exception as exc:
+            logger.error("sync_single_to_mal: failed for '{}': {}".format(item["title"], exc))
+            errors += 1
+    logger.info("sync_single_to_mal: mal_id={} — updated={} skipped={} errors={}".format(
+        mal_id, updated, skipped, errors))
+    return updated, skipped, errors
+
+
+def force_sync_single_from_mal(mal_id):
+    """Reset to MAL status for one item (force MAL status onto Kodi)."""
+    items = [i for i in _get_library_anime() if i["mal_id"] == mal_id]
+    if not items:
+        return 0, 0, 0
+    updated = skipped = errors = 0
+    for item in items:
+        mal_status_data = mal_api.get_anime_list_status(item["mal_id"])
+        if mal_status_data is None:
+            skipped += 1
+            continue
+        mal_status = mal_status_data.get("status")
+        mal_watched_ep = mal_status_data.get("num_episodes_watched", 0) or 0
+        try:
+            if mal_status == mal_api.STATUS_COMPLETED:
+                if not item["watched"]:
+                    logger.info("force_sync_single_from_mal: '{}' marking Kodi watched".format(item["title"]))
+                    _mark_kodi_watched(item)
+                    updated += 1
+                else:
+                    skipped += 1
+            elif (mal_status == mal_api.STATUS_WATCHING
+                  and item["type"] == "tvshow"
+                  and mal_watched_ep != item["watched_episodes"]):
+                logger.info("force_sync_single_from_mal: '{}' setting Kodi to {} ep watched".format(
+                    item["title"], mal_watched_ep))
+                _mark_kodi_episodes_watched(item, mal_watched_ep)
+                updated += 1
+            elif mal_status not in (mal_api.STATUS_COMPLETED, mal_api.STATUS_WATCHING) and item["watched"]:
+                logger.info("force_sync_single_from_mal: '{}' marking Kodi unwatched".format(item["title"]))
+                _mark_kodi_unwatched(item)
+                updated += 1
+            else:
+                skipped += 1
+        except Exception as exc:
+            logger.error("force_sync_single_from_mal: failed for '{}': {}".format(item["title"], exc))
+            errors += 1
+    logger.info("force_sync_single_from_mal: mal_id={} — updated={} skipped={} errors={}".format(
+        mal_id, updated, skipped, errors))
+    return updated, skipped, errors
