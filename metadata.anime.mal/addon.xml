@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <addon id="metadata.anime.mal"
-       version="1.0.0"
+       version="1.0.1"
        name="Anime Scraper (MyAnimeList)"
        provider-name="bruno5p">
   <requires>
@@ -12,11 +12,12 @@
              library="main.py"/>
   <extension point="xbmc.addon.metadata">
     <summary lang="en">Anime metadata from MyAnimeList</summary>
-    <description lang="en">Fetches anime metadata from MyAnimeList via the Jikan API (jikan.moe). Anime movies, OVAs, and specials are treated as Season 0 episodes so entire franchises are managed under one TV show entry.</description>
-    <disclaimer lang="en">Data is provided by MyAnimeList via the unofficial Jikan API. Not affiliated with MyAnimeList.</disclaimer>
+    <description lang="en">Fetches anime metadata from MyAnimeList via a Jikan-v4-compatible API (Tenrai by default). Anime movies, OVAs, and specials are treated as Season 0 episodes so entire franchises are managed under one TV show entry.</description>
+    <disclaimer lang="en">Data is provided by MyAnimeList via the unofficial Tenrai (Jikan-compatible) API. Not affiliated with MyAnimeList.</disclaimer>
     <license>GPL-2.0-only</license>
     <website>https://myanimelist.net</website>
     <source>https://github.com/bruno5p/metadata.anime.mal</source>
-    <news>1.0.0: Initial release</news>
+    <news>1.0.1: Switch to Tenrai API (Jikan public API discontinued); configurable base URL; fail fast when provider is unreachable
+1.0.0: Initial release</news>
   </extension>
 </addon>

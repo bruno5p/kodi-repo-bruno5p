@@ -1,12 +1,15 @@
 """
-Jikan API v4 wrapper.
-Base URL: https://api.jikan.moe/v4
-Rate limit: 60 requests/minute (1 req/sec safe default).
+Jikan API v4-compatible wrapper.
+The public Jikan API was discontinued; the default base URL is now Tenrai,
+a hosted Jikan-v4-schema-compatible MAL mirror: https://api.tenrai.org/v1
+The base URL can be changed with the "api_base_url" addon setting.
+Rate limit: ~120 requests/minute (1 req/sec kept as a safe default).
 No authentication required.
 """
 
 import time
 import xbmc
+import xbmcaddon
 
 try:
     from urllib.request import urlopen, Request
@@ -21,16 +24,32 @@ import re
 
 from resources.lib.logger import logger
 
-BASE_URL = "https://api.jikan.moe/v4"
+_DEFAULT_BASE_URL = "https://api.tenrai.org/v1"
 _last_request_time = 0.0
-_MIN_INTERVAL = 1.0  # seconds between requests (safe for 60 req/min)
+_MIN_INTERVAL = 1.0  # seconds between requests
+_REQUEST_TIMEOUT = 5  # seconds
+_provider_down = False  # set once the provider is unreachable (per process)
+
+
+def _base_url():
+    try:
+        return (
+            xbmcaddon.Addon().getSetting("api_base_url").strip().rstrip("/")
+            or _DEFAULT_BASE_URL
+        )
+    except Exception:
+        return _DEFAULT_BASE_URL
 
 
 def _request(path, params=None):
-    """Make a GET request to the Jikan API with rate limiting and retry on 429."""
-    global _last_request_time
+    """Make a GET request to the API with rate limiting and retry on 429."""
+    global _last_request_time, _provider_down
 
-    url = BASE_URL + path
+    if _provider_down:
+        logger.debug("Provider unreachable earlier — skipping {}".format(path))
+        return None
+
+    url = _base_url() + path
     if params:
         url += "?" + urlencode(params)
 
@@ -51,7 +70,7 @@ def _request(path, params=None):
             req = Request(
                 url, headers={"User-Agent": "metadata.anime.mal/1.0 (Kodi addon)"}
             )
-            response = urlopen(req, timeout=10)
+            response = urlopen(req, timeout=_REQUEST_TIMEOUT)
             data = json.loads(response.read().decode("utf-8"))
             logger.debug("Response OK for {}".format(url))
             return data
@@ -70,7 +89,10 @@ def _request(path, params=None):
             logger.error("HTTP error {} for {}".format(e.code, url))
             return None
         except URLError as e:
-            logger.error("URL error for {}: {}".format(url, str(e)))
+            logger.error(
+                "URL error for {}: {} — skipping remaining requests".format(url, str(e))
+            )
+            _provider_down = True
             return None
 
     logger.error("All attempts exhausted for {}".format(url))

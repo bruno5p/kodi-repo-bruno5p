@@ -3,6 +3,8 @@
   <category label="General">
     <setting id="language" type="enum" label="Preferred title language"
              values="English|Romaji|Japanese" default="1"/>
+    <setting id="api_base_url" type="text" label="MAL API base URL (Jikan v4-compatible)"
+             default="https://api.tenrai.org/v1"/>
   </category>
   <category label="Artwork">
     <setting id="art_source" type="enum" label="Art source"
